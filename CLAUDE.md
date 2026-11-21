@@ -46,36 +46,37 @@ robot_field_toolkit 내부 원칙:
   - 이때 motion_monitor의 명령 속도와 E103 비교 기준도 `/cmd_vel_checked`로 바꾼다(인터락 차단 때문에 E101 오알람 금지).
 
 ## 현재 상태 (2026-11-20 기준)
-**1층이 다 끝나지 않았다.** 2층에 들어가기 전에 1층부터 마무리해야 한다.
+1층 1단계와 2층 1단계는 커밋됨. 1층 2~4단계는 코드 작성·값 확정·Gazebo 확인 완료, 커밋 대기. 다음은 2층 2단계(2축 팔).
 
 | 1층 단계 | 상태 |
 |---|---|
-| 1단계 브리지 변경 + `nodes/fault_injector.py` | 코드 작성·빌드·lint 통과. **미커밋**, Gazebo 실동작 확인 안 됨 |
-| 2단계 판정 기준 + `core/motion_check.py` + pytest | 안 함. 판정 기준 표를 건형에게 먼저 확인받아야 함 |
-| 3단계 `config/alarm_codes.yaml` + `nodes/motion_monitor.py` + `/diagnostics` + `launch/toolkit_base.launch.py` | 안 함 |
-| 4단계 DEVLOG(11/20) + README 체크·알람 코드 표 | 안 함 |
-
-**건형 결정(11/20): 1층 나머지는 미루고 2층 1단계(Nav2)를 먼저 진행.** 1층 2~4단계는 나중에 돌아와서 한다(2층 1단계의 E101 확인도 그때).
+| 1단계 브리지 변경 + `nodes/fault_injector.py` | 완료, 커밋 982de93. Gazebo·Nav2에서 stuck 정지 확인 |
+| 2단계 `core/motion_check.py` + `test/test_motion_check.py` | 작성·pytest 21개 통과. 판정 숫자 11/20 건형 확정(초안 그대로). 미커밋 |
+| 3단계 `config/alarm_codes.yaml`, `core/alarm_codes.py`, `nodes/motion_monitor.py`, `config/motion_monitor.yaml`, `launch/toolkit_base.launch.py` | 작성·빌드·lint·pytest(총 30개) 통과. 등급·점검 순서 11/20 건형 확정(E101 ALARM, E102 WARN, E103 ALARM, E104 WARN). 11/21 Gazebo에서 mode별 E101~E104 발생·해제 확인. launch에 diagnostic_aggregator 포함(rqt_robot_monitor는 /diagnostics_agg를 봄). rqt는 WSLg 렉으로 안 쓰기로 함(건형 결정). 미커밋 |
+| 4단계 DEVLOG 11/20 막힌 것 5개 + README 알람 코드 표 | 작성. README 체크 완료. 미커밋 |
 
 | 2층 단계 | 상태 |
 |---|---|
-| 1단계 SLAM + Nav2 | 진행 중. 패키지 src로 이동·빌드 완료, `map` 기본값을 `maps/simple_room.yaml`(패키지 경로)로 변경. 지도 저장·Nav2 주행 확인은 건형이 할 차례. 미커밋 |
+| 1단계 SLAM + Nav2 | 완료, 커밋 e00c91a. 건형이 Nav2 Goal 주행, stuck 정지, normal 복귀 확인 |
+
+1층 설계 메모 (motion_check):
+- 판정 숫자는 `MotionThresholds` 한곳 + `config/motion_monitor.yaml`(같은 이름의 파라미터).
+- 실제/명령 비율: 움직이라는 축(v, w)마다 구해서 **큰 쪽** 사용(오알람 줄이기). 명령 반대 방향 움직임은 0으로 봄.
+- 마지막 명령을 유지(Gazebo DiffDrive도 마지막 명령 유지, teleop은 키 누를 때만 발행).
+- 해제는 조건이 `clear_time`(1.0s) 동안 계속 사라져야 함(깜빡임 방지). E103은 `loss_min_cmds`(5) 미만이면 판정 안 함.
+- odom이 `odom_timeout`(0.5s) 넘게 없으면 E101/E102/E104 판정 보류.
+- motion_monitor는 판정 10Hz, /diagnostics 1Hz, /field_toolkit/alarms는 변화 때만 JSON(stamp, code, name, level, state raised/cleared, detail).
+- 3층 인터락 이후 `cmd_topic` 파라미터를 `cmd_vel_checked`로 바꿀 것.
 
 2층 1단계 알아 둔 것:
-- Nav2 /cmd_vel 타입은 Twist로 확인 완료(건형이 `ros2 topic info -v`로 확인). fault_injector와 일치.
-- 지도 `maps/simple_room.yaml/.pgm`: map_saver_cli 기본 timeout 2초에서 실패 → `-p save_map_timeout:=10.0`으로 재시도(WSL DDS 디스커버리 느림 추정).
-- cmd_vel 되먹임 고리 수정 완료(건형 승인): controller_server·behavior_server → `/cmd_vel_nav` → velocity_smoother → `/cmd_vel`. 수정 전 /cmd_vel 발행자 6개(controller 1, behavior 4, smoother 1). 수정 후 발행자 smoother 1개, 구독자 fault_injector 1개로 확인 완료(11/20).
-- Nav2 Goal 거부 문제: planner_server의 global_costmap이 활성화 0.5초 만에 map TF 시간 초과로 실패(설정 60초) → Nav2 전체 멈춤. 조치: `lifecycle_manager_navigation`을 `TimerAction(10초)`으로 늦게 시작. 11/20 재시작 후 Nav2 노드 9개 모두 active 확인. 실패하면 Nav2를 껐다 켜야 함(manage_nodes STARTUP 재요청은 이미 active인 노드 때문에 실패).
+- Nav2 /cmd_vel 타입은 Twist(fault_injector와 일치).
+- cmd_vel 고리 수정: controller_server·behavior_server → `/cmd_vel_nav` → velocity_smoother → `/cmd_vel`.
+- Nav2 주행 노드는 `TimerAction(10초)` 뒤에 켜짐. 실패하면 Nav2를 껐다 켜야 함(manage_nodes STARTUP 재요청은 이미 active인 노드 때문에 실패).
 - 진단 팁: Nav2 노드 로그는 `~/.ros/log/<노드이름>_<pid>_*.log`에 남는다.
-- `--symlink-install`이어도 CMake `install(DIRECTORY maps)`는 빌드 시점의 파일만 링크 → 지도 저장 후 다시 빌드해야 설치 폴더에 보임.
+- `--symlink-install`이어도 CMake `install(DIRECTORY maps)`는 빌드 시점의 파일만 링크 → 지도 저장 후 다시 빌드.
 - 브리지가 /cmd_vel을 직접 받지 않으므로 SLAM 지도 만들 때도 fault_injector를 켜야 teleop으로 움직인다.
-
-1층 판정 기준 **초안**(아직 확정 아님, 건형이 결정):
-- E101 구동 정지: 명령 |v|>0.05 m/s 또는 |w|>0.1 rad/s인데 실제 속도가 명령의 20% 미만인 상태가 1.0초 이상
-- E102 출력 저하: 실제/명령 비율 20~70%가 2.0초 이상
-- E103 명령 전달 손실: 최근 2초 /wheel_cmd 수신 수 < /cmd_vel 수신 수의 70%
-- E104 방향 이탈: 직진 명령(|w|<0.05, |v|>0.05)인데 실제 |w|>0.15 rad/s가 1.5초 이상
-- 실제 속도는 /odom twist. 정지 명령일 때 오알람 금지.
+- map_saver_cli는 `-p save_map_timeout:=10.0` 필요(WSL 디스커버리 느림).
+- `ros2 topic hz`는 처음부터 평균 → `--window 20`으로 볼 것.
 
 fault_injector 요약: 파라미터 `mode`(normal/stuck/weak/drop/drift, 실행 중 `ros2 param set` 가능), 모르는 값이면 경고 1회 후 normal. `/fault_injector/mode`(String) 1Hz. stuck=0, weak=40%, drop=50% 버림, drift=w+0.3.
 
