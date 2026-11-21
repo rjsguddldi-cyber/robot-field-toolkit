@@ -1,0 +1,17 @@
+# safety_interlock 파라미터. ※ 값은 초안, 건형 확인 후 확정.
+safety_interlock:
+  ros__parameters:
+    use_sim_time: true
+    cmd_in: cmd_vel
+    cmd_out: cmd_vel_checked
+    speed_override: 100.0   # 통과 주행 명령에 곱하는 비율 [%] (두산 티치펜던트 이동속도)
+    cmd_v_min: 0.05         # |v| 명령이 이보다 크면 주행 명령 [m/s]
+    cmd_w_min: 0.1          # |w| 명령이 이보다 크면 주행 명령 [rad/s]
+    moving_v: 0.02          # 실제 |v|가 이보다 크면 주행 중 [m/s]
+    moving_w: 0.05          # 실제 |w|가 이보다 크면 주행 중 [rad/s]
+    arm_timeout: 8.0        # E303: 팔 목표 도달 제한 시간 [s]
+    reject_hold: 3.0        # E302: 거부 후 알람 표시 시간 [s]
+    clear_time: 1.0         # E301: 해제 지연 [s]
+    arm_state_timeout: 1.0  # 팔 상태가 이보다 오래 없으면 '모름' = 주행 막음 [s]
+    odom_timeout: 0.5       # odom이 이보다 오래 없으면 실제 속도 0으로 봄 [s]
+    inhibit_codes: ['E105']  # 이 알람이 켜진 동안 팔 작업 금지 (E401은 nav_monitor 신호로 따로 받음)

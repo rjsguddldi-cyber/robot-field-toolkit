@@ -2,7 +2,7 @@
 motion_monitor:
   ros__parameters:
     use_sim_time: true
-    cmd_topic: cmd_vel          # 상위 명령 (3층 인터락 후 cmd_vel_checked)
+    cmd_topic: cmd_vel_checked  # 인터락 통과 명령 (막힌 명령으로 E101이 뜨지 않게)
     wheel_cmd_topic: wheel_cmd  # 구동기 입력
     odom_topic: odom            # 실제 속도
     eval_rate: 10.0             # 판정 주기 [Hz]

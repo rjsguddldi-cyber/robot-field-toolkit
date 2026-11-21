@@ -1,10 +1,12 @@
 """
 구동 고장 주입 노드 (E1xx 시험용).
 
-/cmd_vel(상위 명령)을 받아서, mode 파라미터에 따라 일부러 망가뜨린 뒤
-/wheel_cmd(구동기 입력)로 내보낸다. 브리지가 /wheel_cmd를 Gazebo cmd_vel로 넘긴다.
+입력 명령(input_topic, 기본 /cmd_vel. 인터락을 쓰면 /cmd_vel_checked)을 받아서,
+mode 파라미터에 따라 일부러 망가뜨린 뒤 /wheel_cmd(구동기 입력)로 내보낸다.
+브리지가 /wheel_cmd를 Gazebo cmd_vel로 넘긴다.
 
-    명령원(teleop) -> /cmd_vel -> [fault_injector] -> /wheel_cmd -> 브리지 -> Gazebo
+    명령원 -> /cmd_vel -> safety_interlock -> /cmd_vel_checked -> [fault_injector]
+           -> /wheel_cmd -> 브리지 -> Gazebo
 
 mode:
     normal : 그대로 전달
@@ -31,15 +33,18 @@ DRIFT_W = 0.3           # drift: 각속도에 더하는 값 [rad/s]
 
 
 class FaultInjector(Node):
-    """/cmd_vel을 mode에 따라 변형해서 /wheel_cmd로 보내는 노드."""
+    """입력 명령을 mode에 따라 변형해서 /wheel_cmd로 보내는 노드."""
 
     def __init__(self):
         super().__init__('fault_injector')
 
         self.declare_parameter('mode', 'normal')
+        # 입력 토픽: 인터락을 쓰면 cmd_vel_checked (launch에서 지정)
+        self.declare_parameter('input_topic', 'cmd_vel')
         self.warned_mode = None  # 같은 경고를 매 메시지마다 찍지 않으려고 기억
 
-        self.cmd_sub = self.create_subscription(Twist, 'cmd_vel', self.on_cmd_vel, 10)
+        self.cmd_sub = self.create_subscription(
+            Twist, self.get_parameter('input_topic').value, self.on_cmd_vel, 10)
         self.wheel_pub = self.create_publisher(Twist, 'wheel_cmd', 10)
         self.mode_pub = self.create_publisher(String, '~/mode', 10)
 

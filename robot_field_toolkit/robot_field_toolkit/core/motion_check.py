@@ -14,6 +14,8 @@
 from collections import deque
 from dataclasses import dataclass
 
+from robot_field_toolkit.core.common import Debounce, Judgement  # noqa: F401 (Judgement 재사용)
+
 CODES = ('E101', 'E102', 'E103', 'E104')
 
 
@@ -37,41 +39,6 @@ class MotionThresholds:
     odom_timeout: float = 0.5      # odom이 이보다 오래 안 오면 판정 보류 [s]
 
 
-@dataclass
-class Judgement:
-    """코드 하나의 판정 결과."""
-
-    code: str
-    active: bool
-    detail: str = ''
-
-
-class _Debounce:
-    """조건이 on_time 동안 계속 참이면 켜고, off_time 동안 계속 거짓이면 끈다."""
-
-    def __init__(self, on_time, off_time):
-        self.on_time = on_time
-        self.off_time = off_time
-        self.active = False
-        self._since = None  # 현재 상태와 반대인 조건이 시작된 시각
-
-    def update(self, t, condition):
-        if condition == self.active:
-            self._since = None
-            return self.active
-        if self._since is None:
-            self._since = t
-        hold = self.off_time if self.active else self.on_time
-        if t - self._since >= hold:
-            self.active = condition
-            self._since = None
-        return self.active
-
-    def reset(self):
-        self.active = False
-        self._since = None
-
-
 def _axis_ratio(cmd, actual):
     """명령 방향으로 실제로 낸 비율. 반대로 가면 0으로 본다."""
     return max(0.0, actual * (1.0 if cmd > 0 else -1.0) / abs(cmd))
@@ -91,10 +58,10 @@ class MotionChecker:
         self._wheel_times = deque()
         clear = self.th.clear_time
         self._deb = {
-            'E101': _Debounce(self.th.stall_time, clear),
-            'E102': _Debounce(self.th.weak_time, clear),
-            'E103': _Debounce(0.0, clear),  # 구간(window) 자체가 지속 시간 역할
-            'E104': _Debounce(self.th.drift_time, clear),
+            'E101': Debounce(self.th.stall_time, clear),
+            'E102': Debounce(self.th.weak_time, clear),
+            'E103': Debounce(0.0, clear),  # 구간(window) 자체가 지속 시간 역할
+            'E104': Debounce(self.th.drift_time, clear),
         }
 
     # ---------- 입력 ----------
