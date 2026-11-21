@@ -1,4 +1,10 @@
-"""1층 툴킷 실행: fault_injector + motion_monitor + diagnostic_aggregator (시뮬레이션 시간)."""
+"""
+1층·2층 툴킷 실행 (시뮬레이션 시간). Gazebo 다음에 켠다.
+
+명령:  명령원 -> /cmd_vel -> fault_injector -> /wheel_cmd
+팔:    /arm/pose_command -> arm_controller
+감시:  motion_monitor(E1xx)
+"""
 
 import os
 
@@ -8,31 +14,20 @@ from launch_ros.actions import Node
 
 
 def generate_launch_description():
-    pkg_dir = get_package_share_directory('robot_field_toolkit')
-    monitor_params = os.path.join(pkg_dir, 'config', 'motion_monitor.yaml')
-    aggregator_params = os.path.join(pkg_dir, 'config', 'diagnostic_aggregator.yaml')
+    cfg = os.path.join(get_package_share_directory('robot_field_toolkit'), 'config')
+    sim = {'use_sim_time': True}
+
+    def node(executable, params=None, extra=None):
+        parameters = [os.path.join(cfg, params)] if params else []
+        parameters.append({**sim, **(extra or {})})
+        return Node(package='robot_field_toolkit', executable=executable, name=executable,
+                    output='screen', parameters=parameters)
 
     return LaunchDescription([
-        Node(
-            package='robot_field_toolkit',
-            executable='fault_injector',
-            name='fault_injector',
-            output='screen',
-            parameters=[{'use_sim_time': True}],
-        ),
-        Node(
-            package='robot_field_toolkit',
-            executable='motion_monitor',
-            name='motion_monitor',
-            output='screen',
-            parameters=[monitor_params, {'use_sim_time': True}],
-        ),
-        # /diagnostics -> /diagnostics_agg (rqt_robot_monitor가 보는 토픽)
-        Node(
-            package='diagnostic_aggregator',
-            executable='aggregator_node',
-            name='diagnostic_aggregator',
-            output='screen',
-            parameters=[aggregator_params, {'use_sim_time': True}],
-        ),
+        node('fault_injector'),
+        node('arm_controller'),
+        node('motion_monitor', 'motion_monitor.yaml'),
+        Node(package='diagnostic_aggregator', executable='aggregator_node',
+             name='diagnostic_aggregator', output='screen',
+             parameters=[os.path.join(cfg, 'diagnostic_aggregator.yaml'), sim]),
     ])

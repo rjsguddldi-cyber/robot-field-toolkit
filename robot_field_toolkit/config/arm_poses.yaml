@@ -1,0 +1,22 @@
+# 2축 팔 이름 붙은 자세 [rad]. 0 = 팔이 위로 곧게 선 자세, +각도 = 앞으로 숙임.
+# 순서는 수업 Pick & Place: stowed -> approach -> work -> retreat -> stowed
+# ※ 각도는 초안. 건형 확인 후 확정.
+# 관절 한계(URDF): shoulder -1.0 ~ 1.57, elbow -0.5 ~ 2.7
+joint_names: [shoulder_joint, elbow_joint]
+tolerance: 0.05          # 도달 판정 허용 오차 [rad] (약 2.9도)
+poses:
+  stowed:                # 접힘: 차체 위에 접어서 LiDAR 평면 위, 차체 안쪽
+    shoulder_joint: 0.0
+    elbow_joint: 2.6
+  approach:              # 접근: 작업 지점 위쪽
+    shoulder_joint: 0.8
+    elbow_joint: 1.2
+  work:                  # 작업: 차체 앞 낮은 위치
+    shoulder_joint: 1.29
+    elbow_joint: 0.93
+  retreat:               # 후퇴: 작업 지점에서 위로 빠짐
+    shoulder_joint: 0.5
+    elbow_joint: 1.8
+  test_beyond_limit:     # E303 시험용: 어깨 목표가 한계(1.57) 밖이라 도달 못 함
+    shoulder_joint: 2.0
+    elbow_joint: 1.2

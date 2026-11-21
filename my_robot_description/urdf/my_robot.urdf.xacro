@@ -22,6 +22,20 @@
 
   <xacro:property name="camera_size"  value="0.04"/>
   <xacro:property name="camera_mass"   value="0.1"/>
+
+  <!-- 2축 팔 (robot_field_toolkit 2층에서 추가). 각도 0 = 팔이 위로 곧게 선 자세 -->
+  <xacro:property name="arm_post_x"      value="-0.06"/>  <!-- 차체 뒤쪽: LiDAR(x=0.05)에서 0.15m 안쪽 -->
+  <xacro:property name="arm_post_size"   value="0.04"/>
+  <xacro:property name="arm_post_height" value="0.06"/>
+  <xacro:property name="arm_post_mass"   value="0.2"/>
+  <xacro:property name="upper_arm_len"   value="0.15"/>
+  <xacro:property name="upper_arm_size"  value="0.03"/>
+  <xacro:property name="upper_arm_mass"  value="0.3"/>
+  <xacro:property name="forearm_len"     value="0.12"/>
+  <xacro:property name="forearm_size"    value="0.025"/>
+  <xacro:property name="forearm_mass"    value="0.2"/>
+  <xacro:property name="tool_size"       value="0.03"/>
+  <xacro:property name="tool_mass"       value="0.05"/>
   <!-- ==================== Inertia Macros ==================== -->
   <xacro:macro name="box_inertia" params="m x y z">
     <inertial>
@@ -261,6 +275,129 @@
 </gazebo>
 
 
+
+  <!-- ==================== 2축 팔 ==================== -->
+  <!-- 팔 받침(post): 차체 위 뒤쪽 -->
+  <link name="arm_base_link">
+    <visual>
+      <geometry><box size="${arm_post_size} ${arm_post_size} ${arm_post_height}"/></geometry>
+      <material name="orange"><color rgba="1.0 0.5 0.0 1.0"/></material>
+    </visual>
+    <collision>
+      <geometry><box size="${arm_post_size} ${arm_post_size} ${arm_post_height}"/></geometry>
+    </collision>
+    <xacro:box_inertia m="${arm_post_mass}" x="${arm_post_size}" y="${arm_post_size}" z="${arm_post_height}"/>
+  </link>
+  <joint name="arm_base_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="arm_base_link"/>
+    <origin xyz="${arm_post_x} 0 ${chassis_height/2 + arm_post_height/2}" rpy="0 0 0"/>
+  </joint>
+
+  <!-- 위팔: 어깨(pitch) 관절. +각도 = 앞으로 숙임 -->
+  <link name="upper_arm_link">
+    <visual>
+      <origin xyz="0 0 ${upper_arm_len/2}" rpy="0 0 0"/>
+      <geometry><box size="${upper_arm_size} ${upper_arm_size} ${upper_arm_len}"/></geometry>
+      <material name="orange"/>
+    </visual>
+    <collision>
+      <origin xyz="0 0 ${upper_arm_len/2}" rpy="0 0 0"/>
+      <geometry><box size="${upper_arm_size} ${upper_arm_size} ${upper_arm_len}"/></geometry>
+    </collision>
+    <inertial>
+      <origin xyz="0 0 ${upper_arm_len/2}" rpy="0 0 0"/>
+      <mass value="${upper_arm_mass}"/>
+      <inertia ixx="${upper_arm_mass/12*(upper_arm_size**2+upper_arm_len**2)}" ixy="0" ixz="0"
+               iyy="${upper_arm_mass/12*(upper_arm_size**2+upper_arm_len**2)}" iyz="0"
+               izz="${upper_arm_mass/6*upper_arm_size**2}"/>
+    </inertial>
+  </link>
+  <joint name="shoulder_joint" type="revolute">
+    <parent link="arm_base_link"/>
+    <child link="upper_arm_link"/>
+    <origin xyz="0 0 ${arm_post_height/2}" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+    <limit lower="-1.0" upper="1.57" effort="5.0" velocity="1.0"/>
+    <dynamics damping="0.05" friction="0.0"/>
+  </joint>
+
+  <!-- 아래팔: 팔꿈치(pitch) 관절 -->
+  <link name="forearm_link">
+    <visual>
+      <origin xyz="0 0 ${forearm_len/2}" rpy="0 0 0"/>
+      <geometry><box size="${forearm_size} ${forearm_size} ${forearm_len}"/></geometry>
+      <material name="light_gray"/>
+    </visual>
+    <collision>
+      <origin xyz="0 0 ${forearm_len/2}" rpy="0 0 0"/>
+      <geometry><box size="${forearm_size} ${forearm_size} ${forearm_len}"/></geometry>
+    </collision>
+    <inertial>
+      <origin xyz="0 0 ${forearm_len/2}" rpy="0 0 0"/>
+      <mass value="${forearm_mass}"/>
+      <inertia ixx="${forearm_mass/12*(forearm_size**2+forearm_len**2)}" ixy="0" ixz="0"
+               iyy="${forearm_mass/12*(forearm_size**2+forearm_len**2)}" iyz="0"
+               izz="${forearm_mass/6*forearm_size**2}"/>
+    </inertial>
+  </link>
+  <joint name="elbow_joint" type="revolute">
+    <parent link="upper_arm_link"/>
+    <child link="forearm_link"/>
+    <origin xyz="0 0 ${upper_arm_len}" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+    <limit lower="-0.5" upper="2.7" effort="3.0" velocity="1.0"/>
+    <dynamics damping="0.02" friction="0.0"/>
+  </joint>
+
+  <!-- 툴(그리퍼 자리 표시용, 파지는 구현하지 않음) -->
+  <link name="tool_link">
+    <visual>
+      <geometry><box size="${tool_size} ${tool_size} ${tool_size}"/></geometry>
+      <material name="red"/>
+    </visual>
+    <collision>
+      <geometry><box size="${tool_size} ${tool_size} ${tool_size}"/></geometry>
+    </collision>
+    <xacro:box_inertia m="${tool_mass}" x="${tool_size}" y="${tool_size}" z="${tool_size}"/>
+  </link>
+  <joint name="tool_joint" type="fixed">
+    <parent link="forearm_link"/>
+    <child link="tool_link"/>
+    <origin xyz="0 0 ${forearm_len + tool_size/2}" rpy="0 0 0"/>
+  </joint>
+
+  <!-- 관절 위치 제어 (gz 토픽 arm/shoulder_cmd, arm/elbow_cmd, gz.msgs.Double [rad]) -->
+  <gazebo>
+    <plugin filename="gz-sim-joint-position-controller-system"
+            name="gz::sim::systems::JointPositionController">
+      <joint_name>shoulder_joint</joint_name>
+      <topic>arm/shoulder_cmd</topic>
+      <!-- P를 키워 중력 처짐을 줄이고(약 0.7Nm/30 = 0.02rad), 적분 한계를 낮춰 한계에서 버틸 때 적분 누적을 줄임 -->
+      <p_gain>30.0</p_gain>
+      <i_gain>2.0</i_gain>
+      <d_gain>1.0</d_gain>
+      <i_max>0.5</i_max>
+      <i_min>-0.5</i_min>
+      <cmd_max>5.0</cmd_max>
+      <cmd_min>-5.0</cmd_min>
+      <initial_position>0.0</initial_position>
+    </plugin>
+    <plugin filename="gz-sim-joint-position-controller-system"
+            name="gz::sim::systems::JointPositionController">
+      <joint_name>elbow_joint</joint_name>
+      <topic>arm/elbow_cmd</topic>
+      <p_gain>15.0</p_gain>
+      <i_gain>1.0</i_gain>
+      <d_gain>0.3</d_gain>
+      <i_max>0.3</i_max>
+      <i_min>-0.3</i_min>
+      <cmd_max>3.0</cmd_max>
+      <cmd_min>-3.0</cmd_min>
+      <initial_position>2.6</initial_position>
+    </plugin>
+  </gazebo>
+
 <!-- ==================== Gazebo Plugins ==================== -->
 
   <gazebo>
@@ -279,12 +416,14 @@
     </plugin>
   </gazebo>
 
-<!-- 바퀴 조인트 상태 발행 → /joint_states → robot_state_publisher TF-->
+<!-- 바퀴·팔 조인트 상태 발행 → /joint_states → robot_state_publisher TF (같은 플러그인에 팔 관절 추가) -->
   <gazebo>
     <plugin filename="gz-sim-joint-state-publisher-system"
             name="gz::sim::systems::JointStatePublisher">
       <joint_name>left_wheel_joint</joint_name>
       <joint_name>right_wheel_joint</joint_name>
+      <joint_name>shoulder_joint</joint_name>
+      <joint_name>elbow_joint</joint_name>
     </plugin>
   </gazebo>
 </robot>
