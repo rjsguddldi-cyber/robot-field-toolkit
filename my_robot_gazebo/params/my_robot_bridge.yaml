@@ -19,7 +19,8 @@
   gz_type_name: "gz.msgs.Odometry"
   direction: GZ_TO_ROS
 
-- ros_topic_name: "scan"
+# LiDAR 원본은 /scan_raw로 받고, robot_field_toolkit scan_fault_injector가 /scan으로 낸다
+- ros_topic_name: "scan_raw"
   gz_topic_name: "scan"
   ros_type_name: "sensor_msgs/msg/LaserScan"
   gz_type_name: "gz.msgs.LaserScan"

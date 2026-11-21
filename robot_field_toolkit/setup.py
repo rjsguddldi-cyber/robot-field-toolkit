@@ -32,6 +32,8 @@ setup(
             'motion_monitor = robot_field_toolkit.nodes.motion_monitor:main',
             'arm_controller = robot_field_toolkit.nodes.arm_controller:main',
             'safety_interlock = robot_field_toolkit.nodes.safety_interlock:main',
+            'scan_fault_injector = robot_field_toolkit.nodes.scan_fault_injector:main',
+            'sensor_monitor = robot_field_toolkit.nodes.sensor_monitor:main',
         ],
     },
 )

@@ -6,8 +6,9 @@ import pytest
 from robot_field_toolkit.core.alarm_codes import load_alarm_codes, parse_alarm_codes
 from robot_field_toolkit.core.interlock import CODES as INTERLOCK_CODES
 from robot_field_toolkit.core.motion_check import CODES as MOTION_CODES
+from robot_field_toolkit.core.scan_check import CODES as SCAN_CODES
 
-CODES = MOTION_CODES + INTERLOCK_CODES
+CODES = MOTION_CODES + SCAN_CODES + INTERLOCK_CODES
 
 YAML_PATH = Path(__file__).resolve().parents[1] / 'config' / 'alarm_codes.yaml'
 

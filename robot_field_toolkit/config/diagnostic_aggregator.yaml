@@ -8,6 +8,10 @@ diagnostic_aggregator:
         type: diagnostic_aggregator/GenericAnalyzer
         path: Motion                            # 구동 (E1xx)
         startswith: ['field_toolkit/motion']
+      sensor:
+        type: diagnostic_aggregator/GenericAnalyzer
+        path: Sensor                            # LiDAR (E2xx)
+        startswith: ['field_toolkit/sensor']
       interlock:
         type: diagnostic_aggregator/GenericAnalyzer
         path: Interlock                         # 주행·팔 인터락 (E3xx)

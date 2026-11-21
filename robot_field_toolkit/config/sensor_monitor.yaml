@@ -1,0 +1,18 @@
+# sensor_monitor / scan_fault_injector 파라미터. ※ 값은 초안, 건형 확인 후 확정.
+sensor_monitor:
+  ros__parameters:
+    use_sim_time: true
+    valid_ratio_min: 0.6   # E201: 유효 거리값 비율이 이보다 작으면
+    occlusion_time: 2.0    # E201: 지속 [s]
+    rate_window: 2.0       # E202: 수신 주기를 재는 구간 [s]
+    min_rate_hz: 5.0       # E202: 이보다 낮으면 [Hz] (정상 약 10Hz)
+    stale_timeout: 1.0     # E202: 이 시간 넘게 하나도 안 오면 [s]
+    clear_time: 1.0        # 해제 지연 [s]
+
+scan_fault_injector:
+  ros__parameters:
+    use_sim_time: true
+    mode: normal
+    occlude_center_deg: 0.0    # 가림 중심 방향 (0 = 로봇 정면)
+    occlude_width_deg: 180.0   # 가림 구간 폭 [도]
+    dropout_rate_hz: 1.0       # dropout일 때 내보낼 주기 [Hz] (0 = 완전히 끊김)
