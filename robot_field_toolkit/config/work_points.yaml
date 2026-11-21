@@ -1,0 +1,12 @@
+# 작업 지점 좌표 (map 좌표계). ※ 건형이 rviz2 Publish Point(/clicked_point)로 찍어서 넣기.
+# yaw: 도착했을 때 바라볼 방향 [rad] (0 = 지도 +x 방향, 1.57 = +y 방향)
+order: [A, B]
+points:
+  A:
+    x: null
+    y: null
+    yaw: 0.0
+  B:
+    x: null
+    y: null
+    yaw: 0.0

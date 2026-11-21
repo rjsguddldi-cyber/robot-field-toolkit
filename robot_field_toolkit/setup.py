@@ -14,6 +14,7 @@ setup(
         ('share/' + package_name, ['package.xml']),
         ('share/' + package_name + '/config', glob('config/*.yaml')),
         ('share/' + package_name + '/launch', glob('launch/*.launch.py')),
+        ('share/' + package_name + '/test_assets', glob('test_assets/*.sdf')),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
@@ -34,6 +35,8 @@ setup(
             'safety_interlock = robot_field_toolkit.nodes.safety_interlock:main',
             'scan_fault_injector = robot_field_toolkit.nodes.scan_fault_injector:main',
             'sensor_monitor = robot_field_toolkit.nodes.sensor_monitor:main',
+            'nav_monitor = robot_field_toolkit.nodes.nav_monitor:main',
+            'commissioning_runner = robot_field_toolkit.nodes.commissioning_runner:main',
         ],
     },
 )

@@ -45,23 +45,28 @@ Ubuntu 24.04 (WSL2), ROS 2 Jazzy, Gazebo Harmonic, Python
 | E102 | 출력 저하 | WARN | 실제/명령 20~70%, 2.0초 이상 |
 | E103 | 명령 전달 손실 | ALARM | 최근 2초 구동기 입력 수 < 상위 명령 수의 70% |
 | E104 | 방향 이탈 | WARN | 직진 명령 중 실제 회전 0.15 rad/s 초과, 1.5초 이상 |
+| E105 | 바퀴 헛돎 | ALARM | 바퀴 odom 2초 15cm 이상 이동인데 LiDAR 스캔 변화 3cm 미만 (위치 재설정까지 유지, 팔 작업 금지) |
 | E201 | 센서 가림 | ALARM* | LiDAR 유효 거리값 60% 미만, 2.0초 이상 |
 | E202 | 센서 끊김 | ALARM* | LiDAR 수신 5Hz 미만 또는 1초 넘게 수신 없음 |
 | E301 | 팔 펼침 중 주행 차단 | WARN* | 팔이 접힘이 아닌데 주행 명령 → 주행 차단 |
 | E302 | 주행 중 팔 요청 거부 | WARN* | 주행 명령 또는 실제 움직임 중 팔 요청 → 거부 |
 | E303 | 팔 도달 시간 초과 | ALARM* | 팔이 8초 안에 목표 자세 도달 못 함 |
+| E401 | 작업 지점 도착 오차 초과 | WARN* | 도착 후 오차 10cm 또는 8.6도 초과 → 팔 작업 금지 |
+| E402 | 위치 상실 | ALARM* | AMCL 표준편차 0.35m 또는 0.45rad 초과, 2.0초 이상 (기준 확정) |
+| E403 | 경로 차단 | ALARM* | 복구 3회 이상 또는 15초 동안 남은 거리 0.2m도 안 줄어듦 |
 
 \* 2층 코드의 등급과 기준은 초안입니다 (확정 전).
 
 ## 실행 구조
 ```
-명령:  teleop / Nav2 -> /cmd_vel -> safety_interlock(속도 %) -> /cmd_vel_checked
+명령:  teleop / Nav2 / 시운전 러너 -> /cmd_vel -> safety_interlock(속도 %) -> /cmd_vel_checked
        -> fault_injector -> /wheel_cmd -> Gazebo
 팔:    /arm/pose_request -> safety_interlock -> /arm/pose_command -> arm_controller -> Gazebo
 LiDAR: Gazebo -> /scan_raw -> scan_fault_injector -> /scan -> SLAM, Nav2, sensor_monitor
-감시:  motion_monitor(E1xx), sensor_monitor(E2xx), safety_interlock(E3xx)
+감시:  motion_monitor(E101~E105), sensor_monitor(E2xx), safety_interlock(E3xx), nav_monitor(E4xx)
        -> /diagnostics, /field_toolkit/alarms
 ```
+시운전 상태 흐름: [docs/commissioning_flow.md](docs/commissioning_flow.md)
 
 ## 출처
 `my_robot_description`, `my_robot_gazebo`, `my_robot_slam`, `my_robot_navigation`은 로보스타 채용연계 지능형 로봇 엔지니어 양성과정(경기테크노파크) 수업 자료를 바탕으로 합니다.

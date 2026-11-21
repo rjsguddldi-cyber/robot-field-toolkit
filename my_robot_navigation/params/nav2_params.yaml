@@ -118,7 +118,7 @@ local_costmap:
       width: 3
       height: 3
       resolution: 0.05
-      robot_radius: 0.18
+      robot_radius: 0.20  # 차체 모서리까지 0.18m + 여유 2cm (11/22 건형 결정, DEVLOG 13번)
       plugins: ["obstacle_layer", "inflation_layer"]
       obstacle_layer:
         plugin: "nav2_costmap_2d::ObstacleLayer"
@@ -146,7 +146,7 @@ global_costmap:
       update_frequency: 1.0
       publish_frequency: 1.0
       resolution: 0.05
-      robot_radius: 0.18
+      robot_radius: 0.20  # 차체 모서리까지 0.18m + 여유 2cm (11/22 건형 결정, DEVLOG 13번)
       track_unknown_space: true
       plugins: ["static_layer", "obstacle_layer", "inflation_layer"]
       static_layer:
