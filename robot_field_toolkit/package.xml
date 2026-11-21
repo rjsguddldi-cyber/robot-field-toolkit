@@ -3,13 +3,20 @@
 <package format="3">
   <name>robot_field_toolkit</name>
   <version>0.0.0</version>
-  <description>TODO: Package description</description>
+  <description>MoMa 현장 셋업·유지보수용 진단 툴킷 (고장 주입, 감시, 알람)</description>
   <maintainer email="rjsgud@todo.todo">rjsgud</maintainer>
   <license>MIT</license>
 
   <exec_depend>rclpy</exec_depend>
   <exec_depend>geometry_msgs</exec_depend>
   <exec_depend>std_msgs</exec_depend>
+  <exec_depend>nav_msgs</exec_depend>
+  <exec_depend>diagnostic_msgs</exec_depend>
+  <exec_depend>diagnostic_aggregator</exec_depend>
+  <exec_depend>ament_index_python</exec_depend>
+  <exec_depend>python3-yaml</exec_depend>
+  <exec_depend>launch</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
 
   <test_depend>ament_copyright</test_depend>
   <test_depend>ament_flake8</test_depend>

@@ -1,0 +1,11 @@
+# diagnostic_aggregator 설정: /diagnostics를 묶어서 /diagnostics_agg로 낸다.
+# rqt_robot_monitor는 /diagnostics_agg만 보여 준다.
+diagnostic_aggregator:
+  ros__parameters:
+    use_sim_time: true
+    pub_rate: 1.0
+    analyzers:
+      motion:
+        type: diagnostic_aggregator/GenericAnalyzer
+        path: Motion                         # rqt에 보일 묶음 이름
+        startswith: ['field_toolkit/motion']  # motion_monitor가 붙인 이름 앞부분
