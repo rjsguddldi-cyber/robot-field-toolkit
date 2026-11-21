@@ -138,3 +138,21 @@
   - E105 바퀴 헛돎 추가: 바퀴 odom 이동량과 LiDAR 스캔 변화(빔별 거리 변화의 중앙값)를 비교. 위치 재설정(/initialpose)까지 유지, 인터락이 팔 작업 금지, 시운전 러너는 사이클 실패 처리
   - IMU 융합 검토: Gazebo IMU 시스템·robot_localization 모두 있어 구현은 가능. 하지만 EKF는 직진 속도를 바퀴에서 받아서 '벽에 막혀 일정 속도로 헛도는' 경우를 못 잡음(가속도 0으로 같음). 주로 회전 미끄러짐에 효과. TF 주인을 DiffDrive에서 EKF로 바꾸는 큰 수정이라 마감 전에는 보류
 - 전후: (재시험 후 기록)
+
+## 11/22 (PHM 방향 전환)
+### 수업 패키지 변경 (무엇을, 왜)
+- `my_robot_description/urdf/my_robot.urdf.xacro`: IMU 추가 (`imu_link` 차체 중심 + `<gazebo reference="imu_link">` IMU 센서, 100Hz, 잡음 각속도 0.002rad/s·가속도 0.02m/s² 초안). 이유: PHM 회전 잔차(odom 각속도 vs IMU 각속도)를 재려면 바퀴와 독립된 회전 측정이 필요
+- `my_robot_gazebo/params/my_robot_bridge.yaml`: `imu` 항목 추가 (gz.msgs.IMU → sensor_msgs/msg/Imu, GZ_TO_ROS)
+- 월드는 그대로: `simple_room.world`에 `gz-sim-imu-system`이 이미 있음
+
+### IMU Gazebo 확인 (11/22, 건형이 직접 잰 값)
+- /imu 주기(실제 시간 기준) 59.6 / 65.7 / 85.2Hz, Gazebo RTF와 비슷하게 변함 → 시뮬레이션 시간 기준 100Hz
+- teleop 제자리 회전(명령 1.0rad/s): IMU 각속도 1.1927 / 1.1922 / 1.1913rad/s, odom 각속도 1.0000rad/s → **IMU가 약 19% 더 빠름**
+- 계산: 0.25m × 1.000 ÷ 1.192 ≈ 0.21m = 두 바퀴 안쪽 모서리 사이 거리(0.25 − 바퀴 폭 0.04). 원기둥 바퀴의 접촉점이 안쪽 모서리에 잡히는 것으로 추정 (확정 아님)
+- 결정(건형): 보정하지 않고 그대로 둠. 일정한 오차는 PHM 기준선에 흡수되고, 나중에 "재캘리브레이션 권고 → 보정 → 기준선 재설정" 사례로 씀
+
+**14. Gazebo GUI가 OpenGL 컨텍스트를 못 만듦**
+- 증상: `gazebo.launch.py` 실행 시 `[QT] Failed to create OpenGL context for format QSurfaceFormat(version 2.0 ...)`로 Gazebo 꺼짐 (IMU 추가 직후였지만 GUI 문제라 무관)
+- 진단: `GALLIUM_DRIVER=d3d12 glxinfo -B` → `D3D12 (NVIDIA GeForce GTX 1660 Ti)`로 GPU는 정상. WSL이 5시간 넘게 켜져 있었음 → WSLg 화면 기능이 꼬인 것으로 추정
+- 조치: PowerShell에서 `wsl --shutdown` 후 터미널 다시 열기 (새 셸이라 .bashrc는 자동 적용)
+- 전후: Gazebo GUI 실행 실패 → 정상 실행

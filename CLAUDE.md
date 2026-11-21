@@ -19,6 +19,24 @@
   - Nav2는 25cm 안이면 "도착"이지만 팔 작업엔 부족 → E401로 작업 금지.
   - 벽에 막혀 바퀴만 돌 때 Nav2가 거짓 성공 → 바퀴 정보만 믿는 감시(E101, E401)는 못 잡음 → odom과 LiDAR 교차 확인(E105).
 
+## 프로젝트 방향 (11/22 변경: PHM)
+건형의 말: **"자율화된 환경에서는 작은 오차가 연쇄적인 운영 리스크로 증폭된다. 그래서 PHM 시스템을 도입한다."**
+(PHM = Prognostics and Health Management, 고장이 나기 전에 건강 상태를 재서 미리 대응하는 정비 체계)
+
+- **최대한 주입 없이**: 메시지를 조작하는 고장 주입 대신, 실제로 생기는 오차와 운용 조건 변화(바퀴 마모, 미끄러짐, 하중, 환경 변화)로 열화를 만든다. 기존 `fault_injector`, `scan_fault_injector`는 지우지 않고 **기존 알람 시험용으로만** 남긴다.
+- 보여 줄 것:
+  1. 작은 오차가 연쇄적으로 커지는 과정 측정: odom 잔차 → 위치 불확실성 → 작업 지점 도착 오차 → 팔 작업 위험 → 사이클 타임·정지
+  2. PHM이 **첫 고리에서, 기존 알람(E105, E401 등)보다 먼저** 잡아낸다 (몇 사이클 앞서는지).
+- **Gazebo 실제 위치(ground truth)는 감지 입력으로 절대 쓰지 않는다.** 감지 시점·정확도 채점용(별도 CSV 열)으로만 쓴다.
+- **통계 기반만**(평균, 표준편차, 이동평균, 추세선). 머신러닝은 쓰지 않는다.
+- README는 11/25에 PHM 목적으로 다시 쓴다. 그 전까지는 진행 상황 체크만.
+
+### PHM 단계
+1. **IMU 추가**: my_robot_description에 IMU 센서(수업 6장 LiDAR와 같은 방식), 브리지, Gazebo 센서 시스템 확인. 확인: `ros2 topic hz`로 IMU 주기, 제자리 회전 때 IMU 각속도 ≈ odom 각속도.
+2. **건강지표** `core/health_indicators.py` + pytest (rclpy 없이, 가짜 값으로 테스트). 사이클 1회 데이터로: ① 회전 잔차(odom vs IMU 각속도 평균·RMS) ② 이동 잔차(odom 이동 거리 vs TF map→base_link 이동 거리) ③ 구동 추종률(실제/명령 /cmd_vel_checked) ④ AMCL 불확실성(공분산 평균·최대) ⑤ 작업 지점 도착 오차(TF) ⑥ 팔 자세 도달 시간 ⑦ LiDAR 유효 거리값 비율 ⑧ 통신·타이밍(주요 토픽 수신 간격 평균·지터, 헤더 시각 vs 수신 시각). **각 지표의 정의·단위·필요한 이유를 표로 먼저 보여 주고 확인받기.**
+3. **정기 건강 점검 러너** (commissioning_runner 개조): 고정 경로 MoMa 사이클(A → 도착 확인 → 팔 approach/work/retreat/stowed → B …) 반복, A·B는 건형이 Publish Point로 찍음. 사이클마다 지표를 CSV 한 줄 + ground truth 위치 오차 열(채점용). 기준선 = 정상 조건 처음 K사이클 평균·표준편차, 기준선 재설정 명령(정비·재캘리브레이션 후). 건강도 0~100(지표별 기준선 이탈을 합친 점수, **계산식 초안 확인받기**). 예지 경보는 이동평균이 N회 연속 기준 초과일 때만. 확인: 정상 조건에서 건강도 안정, 오경보 없음.
+4. **주입 없는 조건 변화 시나리오 + 자동 대응**: A 바퀴 마모(URDF 실제 바퀴 반지름을 실행마다 단계 축소, DiffDrive odom 계산은 원래 반지름) / B 미끄러짐(경로 중간 저마찰 바닥) / C 하중 증가(차체·팔 끝 질량) / D 환경 변화(지도에 없는 장애물). 각각 실행 명령 한 줄. **Gazebo에서 되는지 먼저 조사해서 보고, 1시간 안에 안 되는 시나리오는 빼고 주입으로 대체하지 않는다.** 자동 대응: 예지 경보 수준별 speed_override 제한, 도착 정확도 나쁘면 팔 정밀 작업 보류 + "재캘리브레이션 권고", 사이클 종료 시 정비 리포트(Markdown: 어떤 지표가, 언제부터, 얼마나, 권고 조치와 우선순위). 잔여 사이클 추정(최근 추세선으로 기존 알람 기준까지). 확인: 시나리오 A에서 PHM 경보가 기존 알람보다 먼저, 몇 사이클 앞서는지.
+
 ## 환경
 - WSL2 Ubuntu 24.04, ROS 2 Jazzy, Gazebo Harmonic, Python만. CPU 6코어, RAM 8GB.
 - 작업공간 `~/field_toolkit_ws` (빌드: 이 폴더에서 `colcon build --symlink-install`).
@@ -66,7 +84,7 @@ robot_field_toolkit 구조:
 - 벽: `ros2 run ros_gz_sim create -world simple_room -name wall_partial -file $(ros2 pkg prefix robot_field_toolkit)/share/robot_field_toolkit/test_assets/wall_partial.sdf -x 1.0 -y 0.0 -z 0.25` / 지우기 `gz service -s /world/simple_room/remove --reqtype gz.msgs.Entity --reptype gz.msgs.Boolean --timeout 2000 --req 'name: "wall_partial" type: MODEL'`
 - 지도 좌표 참고: 지도 10m×10m(원점 -5,-5), 장애물 대략 x -2.5~-1.5/y 2.5~3.5, x -2.5~-1.5/y -2.5~-1.5, x 1.5~2.5/y 1.5~2.5. 원점 주변은 비어 있음.
 
-## 현재 상태 (2026-11-22 기준)
+## 현재 상태 (2026-11-22 기준, PHM 전환 전 시점)
 빌드·pytest·lint는 두 브랜치 모두 통과 (main 64개, wip 92개).
 
 **main** (Gazebo 확인 끝남), 커밋 순서:
@@ -86,11 +104,13 @@ robot_field_toolkit 구조:
 | 2층 5단계 nav_monitor | **wip, 재시험 대기.** E401은 TF 기준으로 바꾼 뒤 15.8cm 측정(정상 동작). E403(진척 없음) 발생 확인. E402 기준 0.35m/0.45rad. 벽 시험 중 바퀴 헛돎 발견 → robot_radius 0.20 + E105 추가 |
 | 2층 6단계 시운전 러너 | **wip.** 코드·pytest만, Gazebo 실행 전. `config/work_points.yaml`의 A, B 좌표가 null → 건형이 rviz2 Publish Point(`/clicked_point`)로 찍어서 채워야 실행됨 |
 
-### 다음 할 일 (순서대로, wip 브랜치에서)
-1. `git checkout wip` → colcon build → **5단계 재시험** (Nav2와 툴킷 재시작 후): wall_partial 너머 Goal → 돌아가는지(robot_radius 0.20 효과) / 걸리면 E105가 뜨는지, 2D Pose Estimate로 해제되는지 → wall_full로 E403 → occlude 300도로 E201 → E402 순서(안 떠도 결과로 기록). DEVLOG 11번·13번 "전후" 채우기.
-2. **초안 값 확정** (아래 표) — 건형에게 표로 보여 주고 결정받기.
-3. 6단계: Publish Point로 A, B 찍기 → 시운전 normal 1회 + LiDAR occlude 1회 → 리포트 2개 비교 → DEVLOG에 직접 잰 숫자.
-4. 확인 끝난 것부터 main에 합치기(건형 "커밋해"/"합쳐" 후), README 진행 상황 체크, push.
+### 다음 할 일 (11/22 PHM 방향으로 변경)
+- 작업 브랜치: **wip** (PHM은 시운전 러너·nav_check 등 wip 코드 위에 만든다). main은 Gazebo 확인 끝난 것만.
+- 위 "PHM 단계" 1 → 4 순서. 지금: **1단계 IMU 추가** — 코드 완료, Gazebo 확인 완료, 커밋 대기.
+- 1단계 발견: 제자리 회전에서 IMU 1.192rad/s vs odom 1.000rad/s (유효 바퀴 간격 약 0.21m, 바퀴 안쪽 모서리 접촉 추정). **건형 결정: 보정하지 않음** (기준선에 흡수, 4단계 재캘리브레이션 사례로 사용). DEVLOG 11/22.
+- Gazebo GUI OpenGL 오류는 `wsl --shutdown`으로 해결(DEVLOG 14번).
+- 기존 2층 재시험(wall_partial 우회, E105, E403, occlude → E402)은 PHM 4단계 시나리오와 겹치므로 그때 함께 확인.
+- 남은 초안 값 확정(아래 표)은 PHM 지표·건강도 확인 때 함께.
 
 ### 알람 코드와 확정 여부
 | 코드 | 이름 | 등급 | 기준 | 확정 |
@@ -127,9 +147,10 @@ robot_field_toolkit 구조:
 - 원칙은 **한 단계씩**. 각 단계 끝에 ① 만든·바꾼 파일 설명 ② 확인 방법(터미널별 명령) ③ 이름 바꾸기 실험 1개. (건형이 "전부 해줘"처럼 묶어서 요청하면 그대로 하되 값은 초안으로 두고 마지막에 표로 확인받는다.)
 - 판정 숫자, 알람 등급, 점검 순서, 자세 각도 같은 값은 **초안을 표로** 보여 주고 의미와 바꿨을 때 영향을 설명한 뒤 확인받는다. 최종 결정은 건형.
 - Gazebo, rviz2, teleop, Nav2 등 GUI·상시 실행 명령은 Claude가 실행하지 말고 알려 준다. colcon build, pytest, git은 Claude가 해도 된다.
-- **"커밋해"라고 하기 전에는 커밋 금지.** 원래는 건형이 자기 말로 설명한 뒤 커밋하지만, 건형이 바쁘다고 하면 생략 가능(11/21). 커밋 메시지는 한국어 `feat: ...`, `docs: ...`.
+- **"커밋해"라고 하기 전에는 커밋 금지.** 원래는 건형이 자기 말로 설명한 뒤 커밋하지만, 건형이 바쁘다고 하면 생략 가능(11/21). 커밋 메시지는 한국어 `feat: ...`, `docs: ...`. **커밋하면 그날 push.**
 - 수업 패키지를 바꿀 때는 무엇을 왜 바꿨는지 `docs/DEVLOG.md`에 남긴다.
 - DEVLOG의 막힌 문제는 **[증상 → 진단 도구·방법 → 조치 → 전후 수치]** 형식, **직접 잰 숫자만**.
 - 새 알람 코드는 `config/alarm_codes.yaml`에 같은 형식(name, level, meaning, causes, checks)으로 추가하고 `test_alarm_codes.py`의 CODES에 해당 core 모듈을 넣는다.
-- 단계마다 마무리: README "진행 상황" 체크박스와 알람 코드 표 갱신, DEVLOG 추가.
+- 단계마다 마무리: DEVLOG 추가, README는 "진행 상황" 체크만 (11/25에 PHM 목적으로 다시 씀).
+- PHM: ground truth는 채점용으로만, 통계 기반만(ML 금지), 고장 주입 대신 조건 변화로 열화.
 - **하지 말 것**: 파지·캘리브레이션 구현, 자체 경로 계획·회피 알고리즘, 블랙박스·로그 번들(3층에서 함).
