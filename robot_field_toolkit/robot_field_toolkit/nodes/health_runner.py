@@ -43,7 +43,8 @@ INFO_COLS = ['cycle', 'sim_time_s', 'point', 'load_state', 'success', 'fail_reas
              'cycle_time_s', 'alarms', 'nav_recoveries']
 PHM_COLS = ['health', 'phm_status', 'learned', 'worst_indicator', 'alarm_indicators']
 # 채점 전용: 실제 도착 오차, 그리고 도착 순간 로봇이 믿는 위치(TF)와 실제 위치의 거리
-GT_COLS = ['gt_arrive_dist_cm', 'gt_arrive_yaw_deg', 'gt_loc_err_cm']
+GT_COLS = ['gt_arrive_dist_cm', 'gt_arrive_yaw_deg', 'gt_loc_err_cm',
+           'condition']   # 시험 조건 표시 (예: wheel_wear=0.03). 채점·분석용, 판정에는 안 씀
 
 
 def stamp_sec(header):
@@ -59,7 +60,8 @@ class HealthRunner(Node):
                 ('points_file', ''), ('cycles', 20), ('settle_time', 2.0),
                 ('nav_timeout', 120.0), ('arm_step_timeout', 15.0),
                 ('report_dir', '~/field_toolkit_reports'), ('baseline_file', 'phm_baseline.json'),
-                ('load_state', 'empty'), ('k_baseline', 8), ('ma_window', 5),
+                ('load_state', 'empty'), ('csv_name', ''), ('condition', ''),
+                ('k_baseline', 8), ('ma_window', 5),
                 ('n_consecutive', 3), ('caution_d', 2.0), ('warning_d', 3.0),
                 ('score_slope', 20.0), ('clip_d', 6.0)]:
             self.declare_parameter(name, default)
@@ -89,9 +91,12 @@ class HealthRunner(Node):
         self.ind_settings = IndicatorSettings()
         self.load_state = p('load_state')
 
-        self.csv_path = os.path.join(
-            out_dir, 'phm_' + datetime.now().strftime('%Y%m%d_%H%M%S') + '.csv')
-        self.csv_file = open(self.csv_path, 'w', newline='', encoding='utf-8')
+        self.condition = p('condition')   # 시험 조건 표시 (CSV 열만, 판정에 안 씀)
+        # csv_name을 주면 그 파일에 이어 쓴다 (예: 마모 단계마다 러너를 다시 켜도 한 파일)
+        name = p('csv_name') or 'phm_' + datetime.now().strftime('%Y%m%d_%H%M%S') + '.csv'
+        self.csv_path = os.path.join(out_dir, name)
+        self.csv_new = not os.path.exists(self.csv_path) or os.path.getsize(self.csv_path) == 0
+        self.csv_file = open(self.csv_path, 'a', newline='', encoding='utf-8')
         self.csv = None   # 첫 사이클 지표 키를 보고 머리줄을 쓴다
 
         # ---- 통신 ----
@@ -100,6 +105,7 @@ class HealthRunner(Node):
         self.status_pub = self.create_publisher(String, 'field_toolkit/phm_status', 10)
         latched = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
         self.create_subscription(String, 'field_toolkit/load_state', self.on_load, latched)
+        self.create_subscription(String, 'field_toolkit/condition', self.on_condition, latched)
         self.create_subscription(String, 'arm/state', self.on_arm_state, 10)
         self.create_subscription(String, 'field_toolkit/alarms', self.on_alarm, 10)
         self.create_subscription(Bool, 'field_toolkit/arm_work_inhibit', self.on_inhibit, 10)
@@ -143,6 +149,9 @@ class HealthRunner(Node):
         if msg.data and msg.data != self.load_state:
             self.get_logger().info(f'하중 상태 변경: {self.load_state} -> {msg.data} (다음 사이클부터)')
             self.load_state = msg.data
+
+    def on_condition(self, msg):
+        self.condition = msg.data
 
     def on_arm_state(self, msg):
         try:
@@ -246,6 +255,7 @@ class HealthRunner(Node):
             return
         self.point = self.order[self.idx % len(self.order)]
         self.cycle_load = self.load_state   # 사이클 도중 바뀌어도 시작 때 값으로 기록
+        self.cycle_condition = self.condition
         self.cycle_start_t = t
         self.alarms = []
         self.recoveries = 0
@@ -351,8 +361,7 @@ class HealthRunner(Node):
         success = not fail_reason
         ind = compute_indicators(self.data, self.ind_settings)
         v = self.phm.update(self.cycle_load, ind, success)
-        if v.status == 'learning':
-            self.save_baseline()
+        self.save_baseline()   # 기준선 + 이동평균 이력 (러너를 다시 켜도 이어지게)
 
         info = {
             'cycle': self.idx + 1, 'sim_time_s': round(self.cycle_start_t, 1),
@@ -363,12 +372,13 @@ class HealthRunner(Node):
             'health': None if v.health is None else round(v.health, 1),
             'phm_status': v.status, 'learned': f'{v.learned}/{v.k}',
             'worst_indicator': v.worst or '', 'alarm_indicators': ' '.join(v.alarm_keys)}
-        gt = dict(zip(GT_COLS, self.gt_arrival or (None, None, None)))
+        gt = dict(zip(GT_COLS, (*(self.gt_arrival or (None, None, None)), self.cycle_condition)))
         row = {**info, **{k: (round(x, 4) if isinstance(x, float) else x)
                           for k, x in ind.items()}, **phm, **gt}
         if self.csv is None:
             self.csv = csv.DictWriter(self.csv_file, INFO_COLS + list(ind) + PHM_COLS + GT_COLS)
-            self.csv.writeheader()
+            if self.csv_new:
+                self.csv.writeheader()
         self.csv.writerow(row)
         self.csv_file.flush()
 
@@ -378,12 +388,16 @@ class HealthRunner(Node):
             'alarm_indicators': list(v.alarm_keys), 'd_ma': v.d_ma or {}},
             ensure_ascii=False)))
         health_txt = '-' if v.health is None else f'{v.health:.0f}'
-        log = self.get_logger().warn if v.status in ('caution', 'warning') else \
-            self.get_logger().info
         alarm_txt = f' 경보: {",".join(v.alarm_keys)}' if v.alarm_keys else ''
-        log(f'사이클 {self.idx + 1} {"성공" if success else "실패 " + fail_reason} '
-            f'{t - self.cycle_start_t:.1f}s | 건강도 {health_txt} [{v.label()}] '
-            f'가장 나쁜 지표 {v.worst or "-"}{alarm_txt}')
+        text = (f'사이클 {self.idx + 1} {"성공" if success else "실패 " + fail_reason} '
+                f'{t - self.cycle_start_t:.1f}s | 건강도 {health_txt} [{v.label()}] '
+                f'가장 나쁜 지표 {v.worst or "-"}{alarm_txt}')
+        # rclpy 로거는 호출 위치마다 심각도를 기억해서, 한 줄에서 info와 warn을 번갈아 부르면
+        # ValueError로 죽는다 (11/23 첫 주의 경보 때 발생) → 호출 위치를 나눈다
+        if v.status in ('caution', 'warning'):
+            self.get_logger().warn(text)
+        else:
+            self.get_logger().info(text)
 
         self.data = None
         self.idx += 1

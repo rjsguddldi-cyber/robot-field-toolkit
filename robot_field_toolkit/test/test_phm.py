@@ -169,3 +169,20 @@ def test_baseline_survives_save_and_load():
     mon2 = PhmMonitor(saved=saved)
     assert mon2.update('empty', normal_cycle(rng), True).status == NORMAL
     assert mon2.baselines['empty'].mean == pytest.approx(mon.baselines['empty'].mean)
+
+
+def test_history_continues_after_restart():
+    """러너를 다시 켜도(저장 → 불러오기) 이동평균·연속 수가 이어져 경보 시점이 같다."""
+    def run(restart_at):
+        mon = PhmMonitor()
+        rng = random.Random(9)
+        learn(mon, rng)
+        for i in range(25):
+            if i == restart_at:
+                mon = PhmMonitor(saved=json.loads(json.dumps(mon.to_dict())))
+            v = mon.update('empty', normal_cycle(rng, trans=0.4 * i), True)
+            if v.status == CAUTION:
+                return i
+        return None
+    assert run(restart_at=None) is not None
+    assert run(restart_at=None) == run(restart_at=9)

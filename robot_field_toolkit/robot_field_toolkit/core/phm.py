@@ -140,10 +140,15 @@ class PhmMonitor:
     def __init__(self, settings=None, saved=None):
         self.s = settings or PhmSettings()
         self.baselines = {}
-        for load, b in (saved or {}).items():
-            self.baselines[load] = LoadBaseline(self.s.k_baseline, b.get('samples'))
         self._z = {}      # 하중 -> 지표 -> 최근 M개 잘린 부호 이탈
         self._count = {}  # 하중 -> 지표 -> [주의 연속 수, 경고 연속 수]
+        for load, b in (saved or {}).items():
+            self.baselines[load] = LoadBaseline(self.s.k_baseline, b.get('samples'))
+            # 운영 이력: 러너를 다시 켜도(예: 마모 단계 전환) 이동평균·연속 수가 이어지게
+            hist = b.get('history', {})
+            self._z[load] = {k: deque(v, maxlen=self.s.ma_window)
+                             for k, v in hist.get('z', {}).items()}
+            self._count[load] = {k: list(v) for k, v in hist.get('count', {}).items()}
 
     def baseline(self, load):
         if load not in self.baselines:
@@ -157,7 +162,13 @@ class PhmMonitor:
         self._count.pop(load, None)
 
     def to_dict(self):
-        return {load: b.to_dict() for load, b in self.baselines.items()}
+        out = {}
+        for load, b in self.baselines.items():
+            out[load] = b.to_dict()
+            out[load]['history'] = {
+                'z': {k: list(q) for k, q in self._z.get(load, {}).items()},
+                'count': self._count.get(load, {})}
+        return out
 
     def update(self, load, indicators, success):
         """사이클 1회 지표 -> Verdict. 하중이 다르면 기준선도 따로 (다른 하중끼리 비교 안 함)."""

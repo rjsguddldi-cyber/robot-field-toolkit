@@ -15,10 +15,16 @@ def generate_launch_description():
     return LaunchDescription([
         DeclareLaunchArgument('cycles', default_value='20', description='사이클 수'),
         DeclareLaunchArgument('load_state', default_value='empty', description='하중 상태'),
+        DeclareLaunchArgument('csv_name', default_value='',
+                              description='이어 쓸 CSV 이름 (비우면 새 파일)'),
+        DeclareLaunchArgument('condition', default_value='',
+                              description='시험 조건 표시 (예: wheel_wear=0.03)'),
         Node(package='robot_field_toolkit', executable='health_runner',
              name='health_runner', output='screen',
              parameters=[os.path.join(cfg, 'health_runner.yaml'), {
                  'use_sim_time': True,
                  'cycles': ParameterValue(LaunchConfiguration('cycles'), value_type=int),
-                 'load_state': LaunchConfiguration('load_state')}]),
+                 'load_state': LaunchConfiguration('load_state'),
+                 'csv_name': LaunchConfiguration('csv_name'),
+                 'condition': LaunchConfiguration('condition')}]),
     ])

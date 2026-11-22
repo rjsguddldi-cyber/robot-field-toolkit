@@ -10,6 +10,8 @@ health_runner:
     report_dir: '~/field_toolkit_reports'
     baseline_file: 'phm_baseline.json'   # report_dir 안. 하중 상태별 기준선
     load_state: 'empty'          # /field_toolkit/load_state가 안 오면 쓰는 하중 상태
+    csv_name: ''                 # 이어 쓸 CSV 이름 (비우면 phm_<시각>.csv 새 파일)
+    condition: ''                # 시험 조건 표시 (예: wheel_wear=0.03). CSV 열에만 쓰고 판정에는 안 씀
     # ---- 판정 (core/phm.py) ----
     k_baseline: 8                # K: 하중 상태마다 기준선을 배우는 성공 사이클 수
     ma_window: 5                 # M: 이동평균 창 [사이클]
