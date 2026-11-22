@@ -1,0 +1,20 @@
+# health_runner (PHM 3단계 정기 건강 점검) 파라미터. 11/23 건형 확정.
+health_runner:
+  ros__parameters:
+    use_sim_time: true
+    points_file: ''              # 비우면 패키지 config/work_points.yaml (A, B를 rviz2로 찍어 넣기)
+    cycles: 20                   # 한 번 실행에 도는 사이클 수 (A, B 번갈아)
+    settle_time: 2.0             # 도착 후 기다렸다가 도착 오차를 잰다 [s]
+    nav_timeout: 120.0           # 이동 제한 시간 [s]
+    arm_step_timeout: 15.0       # 팔 자세 하나 제한 시간 [s]
+    report_dir: '~/field_toolkit_reports'
+    baseline_file: 'phm_baseline.json'   # report_dir 안. 하중 상태별 기준선
+    load_state: 'empty'          # /field_toolkit/load_state가 안 오면 쓰는 하중 상태
+    # ---- 판정 (core/phm.py) ----
+    k_baseline: 8                # K: 하중 상태마다 기준선을 배우는 성공 사이클 수
+    ma_window: 5                 # M: 이동평균 창 [사이클]
+    n_consecutive: 3             # N: 이동평균이 기준을 몇 사이클 연속 넘어야 경보
+    caution_d: 2.0               # 주의: 평소 흔들림(표준편차)의 2배
+    warning_d: 3.0               # 경고: 3배
+    score_slope: 20.0            # 건강도 감점: d 1 초과부터 1당 20점 (화면용, 경보와 무관)
+    clip_d: 6.0                  # 이동평균에 넣기 전 사이클 1회 이탈을 ±6으로 자름 (0점 기준과 같음)

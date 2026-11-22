@@ -55,3 +55,10 @@
   ros_type_name: "sensor_msgs/msg/Imu"
   gz_type_name: "gz.msgs.IMU"
   direction: GZ_TO_ROS
+
+# 채점용 ground truth (PHM 3단계): Gazebo 실제 위치. 감지에는 쓰지 않는다
+- ros_topic_name: "ground_truth/odom"
+  gz_topic_name: "ground_truth/odom"
+  ros_type_name: "nav_msgs/msg/Odometry"
+  gz_type_name: "gz.msgs.Odometry"
+  direction: GZ_TO_ROS

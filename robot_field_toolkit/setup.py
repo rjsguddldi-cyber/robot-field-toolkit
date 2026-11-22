@@ -37,6 +37,7 @@ setup(
             'sensor_monitor = robot_field_toolkit.nodes.sensor_monitor:main',
             'nav_monitor = robot_field_toolkit.nodes.nav_monitor:main',
             'commissioning_runner = robot_field_toolkit.nodes.commissioning_runner:main',
+            'health_runner = robot_field_toolkit.nodes.health_runner:main',
         ],
     },
 )

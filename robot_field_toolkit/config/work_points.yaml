@@ -2,11 +2,11 @@
 # yaw: 도착했을 때 바라볼 방향 [rad] (0 = 지도 +x 방향, 1.57 = +y 방향)
 order: [A, B]
 points:
-  A:
-    x: null
-    y: null
-    yaw: 0.0
+  A:              # 11/23 건형 rviz2 Publish Point (다시 찍음)
+    x: 4.02
+    y: -3.69
+    yaw: -0.69    # B -> A 진행 방향 (도착 직전 회전을 줄임)
   B:
-    x: null
-    y: null
-    yaw: 0.0
+    x: -3.9
+    y: 2.79
+    yaw: 2.46     # A -> B 진행 방향

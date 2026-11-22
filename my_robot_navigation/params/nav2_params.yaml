@@ -37,7 +37,7 @@ bt_navigator:
     robot_base_frame: base_footprint
     odom_topic: /odom
     bt_loop_duration: 10
-    default_server_timeout: 20
+    default_server_timeout: 100   # 11/23: 20 -> 100ms, WSL 통신 지연 한 번에 주행 중단 방지 (DEVLOG 17)
     navigators: ['navigate_to_pose', 'navigate_through_poses']
     navigate_to_pose:
       plugin: "nav2_bt_navigator::NavigateToPoseNavigator"
@@ -63,8 +63,8 @@ controller_server:
 
     general_goal_checker:
       plugin: "nav2_controller::SimpleGoalChecker"
-      xy_goal_tolerance: 0.25
-      yaw_goal_tolerance: 0.25
+      xy_goal_tolerance: 0.05    # 11/23: 0.25 -> 0.08 -> 0.05, E401(0.10m)까지 여유 5cm (DEVLOG 15, 16)
+      yaw_goal_tolerance: 0.12   # 11/23: 0.25 -> 0.12, E401(0.15rad)보다 안쪽
       stateful: true
 
     FollowPath:
@@ -90,7 +90,7 @@ controller_server:
       linear_granularity: 0.05
       angular_granularity: 0.025
       transform_tolerance: 0.2
-      xy_goal_tolerance: 0.25
+      xy_goal_tolerance: 0.05    # 11/23: goal checker와 같게 (이 안에선 DWB가 제자리 회전만 함)
       trans_stopped_velocity: 0.25
       short_circuit_trajectory_evaluation: true
       stateful: true
