@@ -107,6 +107,24 @@ def test_e403_detour_with_temporary_increase_ok():
     assert not r['E403']
 
 
+def test_e403_ignores_zero_distance_before_plan():
+    """경로 계산 전 남은 거리 0 피드백 뒤 10.2m에서 잘 줄어들면 E403 아님 (11/23 버그)."""
+    nc = NavChecker()
+    nc.update_status(0.0, 'g1', STATUS_EXECUTING)
+    nc.update_feedback(0.0, 0.0, 0)
+    r = feedback_run(nc, 0.5, 40.0, lambda t: 10.2 - 0.25 * t)
+    assert not r['E403']
+
+
+def test_e403_still_raised_when_blocked_after_zero_feedback():
+    """0 피드백이 먼저 와도 실제로 막히면 E403은 뜬다."""
+    nc = NavChecker()
+    nc.update_status(0.0, 'g1', STATUS_EXECUTING)
+    nc.update_feedback(0.0, 0.0, 0)
+    r = feedback_run(nc, 0.5, 17.0, lambda t: 3.0)
+    assert r['E403']
+
+
 def test_e403_recoveries():
     nc = NavChecker()
     nc.update_status(0.0, 'g1', STATUS_EXECUTING)

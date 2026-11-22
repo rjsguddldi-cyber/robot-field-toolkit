@@ -85,8 +85,17 @@ class NavChecker:
             self.status_t = t
 
     def update_feedback(self, t, distance_remaining, recoveries):
+        """
+        Nav2 피드백 (남은 거리 [m], 복구 횟수).
+
+        경로를 계산하기 전 피드백은 남은 거리가 0으로 온다. 이것을 진척 기준점으로
+        잡으면 실제 남은 거리(예: 10m)가 와도 '줄지 않음'이 되어 15초 뒤 E403이 뜬다
+        (11/23, DEVLOG 18번). 그래서 0 이하는 기준점으로 쓰지 않는다.
+        """
         self.dist_remaining = distance_remaining
         self.recoveries = recoveries
+        if distance_remaining <= 0.0:
+            return
         if self._progress_ref is None or \
                 self._progress_ref[1] - distance_remaining >= self.th.progress_min:
             self._progress_ref = (t, distance_remaining)
