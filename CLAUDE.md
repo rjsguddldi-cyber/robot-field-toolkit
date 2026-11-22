@@ -67,10 +67,10 @@
 | `robot_field_toolkit` | ament_python, MIT | 내 패키지 |
 
 robot_field_toolkit 구조:
-- `core/` (rclpy 금지, pytest): `common.py`(Judgement, Debounce, 각도 도구), `motion_check.py`(E101~E104), `slip_check.py`(E105), `scan_check.py`(E201·E202, occlude 계산), `interlock.py`(E301~E303, 속도 %), `nav_check.py`(E401~E403, pose_error), `arm_pose.py`(자세 추적), `commissioning.py`(계획·집계·리포트), `alarm_codes.py`(코드표 읽기), `health_indicators.py`(PHM 지표, wip)
-- `nodes/` (얇은 껍데기): `fault_injector`, `motion_monitor`(E101~E105), `arm_controller`, `safety_interlock`(E301~E303), `scan_fault_injector`, `sensor_monitor`(E201·E202), `nav_monitor`(E401~E403), `commissioning_runner`, 공통 `alarm_reporter.py`(AlarmReporter: /diagnostics 1Hz + /field_toolkit/alarms JSON + 터미널 안내)
-- `config/`: `alarm_codes.yaml`, `motion_monitor.yaml`, `safety_interlock.yaml`, `sensor_monitor.yaml`(scan_fault_injector 포함), `nav_monitor.yaml`, `arm_poses.yaml`, `commissioning.yaml`, `work_points.yaml`, `diagnostic_aggregator.yaml`
-- `launch/`: `toolkit_base.launch.py`(툴킷 노드 7개 + diagnostic_aggregator), `commissioning.launch.py`
+- `core/` (rclpy 금지, pytest): `common.py`(Judgement, Debounce, 각도 도구), `motion_check.py`(E101~E104), `slip_check.py`(E105), `scan_check.py`(E201·E202, occlude 계산), `interlock.py`(E301~E303, 속도 %), `nav_check.py`(E401~E403, pose_error), `arm_pose.py`(자세 추적), `commissioning.py`(계획·집계·리포트), `alarm_codes.py`(코드표 읽기), `health_indicators.py`(PHM 지표, wip), `phm.py`(PHM 하중별 기준선·건강도·예지 경보, wip)
+- `nodes/` (얇은 껍데기): `fault_injector`, `motion_monitor`(E101~E105), `arm_controller`, `safety_interlock`(E301~E303), `scan_fault_injector`, `sensor_monitor`(E201·E202), `nav_monitor`(E401~E403), `commissioning_runner`, `health_runner`(PHM 3단계 정기 점검, wip), 공통 `alarm_reporter.py`(AlarmReporter: /diagnostics 1Hz + /field_toolkit/alarms JSON + 터미널 안내)
+- `config/`: `alarm_codes.yaml`, `motion_monitor.yaml`, `safety_interlock.yaml`, `sensor_monitor.yaml`(scan_fault_injector 포함), `nav_monitor.yaml`, `arm_poses.yaml`, `commissioning.yaml`, `health_runner.yaml`, `work_points.yaml`, `diagnostic_aggregator.yaml`
+- `launch/`: `toolkit_base.launch.py`(툴킷 노드 7개 + diagnostic_aggregator), `commissioning.launch.py`, `health_check.launch.py`
 - `test_assets/`: `wall_partial.sdf`(3m), `wall_full.sdf`(10m) 고정 벽 (E403·E105 시험)
 - `test/`: pytest 92개 + ament flake8/pep257 통과 (11/22 기준). 멀티라인 docstring은 둘째 줄부터(D213), 첫 단어 대문자 규칙(D403) 주의, import는 알파벳순(rcl_interfaces가 rclpy보다 앞).
 - `docs/commissioning_flow.md`: 시운전 상태 흐름 mermaid.
@@ -89,6 +89,7 @@ robot_field_toolkit 구조:
 3. `ros2 launch my_robot_navigation navigation.launch.py` (10~15초 뒤 `Managed nodes are active`)
 4. `ros2 launch my_robot_navigation navigation_rviz.launch.xml` → 2D Pose Estimate
 5. (시운전) `ros2 launch robot_field_toolkit commissioning.launch.py note:='메모'`
+6. (PHM 정기 점검) `ros2 launch robot_field_toolkit health_check.launch.py cycles:=20` / 하중: `ros2 topic pub --once -q /field_toolkit/load_state std_msgs/msg/String "{data: loaded_2kg}" --qos-durability transient_local` / 기준선 재설정: `ros2 service call /health_runner/reset_baseline std_srvs/srv/Trigger`
 - 고장 주입: `ros2 param set /fault_injector mode stuck|weak|drop|drift|normal`, `ros2 param set /scan_fault_injector mode occlude|dropout|normal` (`occlude_width_deg`, `dropout_rate_hz`)
 - 팔: `ros2 topic pub --once /arm/pose_request std_msgs/msg/String "{data: approach}"`
 - 속도: `ros2 param set /safety_interlock speed_override 30.0`
@@ -119,6 +120,8 @@ robot_field_toolkit 구조:
 - 작업 브랜치: **wip** (PHM은 시운전 러너·nav_check 등 wip 코드 위에 만든다). main은 Gazebo 확인 끝난 것만.
 - 위 "PHM 단계" 1 → 4 순서. 1단계 IMU 추가는 커밋 d15e4bc(wip, push됨).
 - **2단계 건강지표 (11/22 작성, 미커밋)**: `core/health_indicators.py` + `test/test_health_indicators.py`(18개). 건형 확정(추천대로): ① 회전 잔차는 차이(평균·RMS)와 비율(최소제곱 기울기) 둘 다, 회전 중(|odom w|>0.1) 샘플만 / ② 이동 잔차는 시작·끝 직선 이동량 비교(누적 경로 길이 X) / 보정 전후 odom 비교는 4단계 여유 있으면. `CycleData`에 (시각, 값) 목록을 넣고 `compute_indicators()` → CSV 한 줄 dict. `INDICATORS` 표에 하중 영향 표시(②③⑥ → 3단계 하중별 기준선). ⑧ 타이밍 토픽: scan, odom, imu, joint_states. 결과 열(사이클 타임, 성공, 알람, 복구 횟수)과 채점 열(ground truth 오차)은 3단계 러너에서.
+- 2단계 커밋 1bc9092 (wip, push됨).
+- **3단계 정기 점검 (11/23 작성, 미커밋, Gazebo 확인 끝)**: `core/phm.py` + `test/test_phm.py`(12개), `nodes/health_runner.py`, `config/health_runner.yaml`, `launch/health_check.launch.py`, 수업 패키지에 ground truth(OdometryPublisher → `/ground_truth/odom`). 건형 확정(초안대로): K=8, M=5, N=3, 주의 d>2 / 경고 d>3, 20사이클, 건강도 (평균+최저)/2, 감점 20점/σ, 최소 표준편차 표는 `core/phm.py` HEALTH_INDICATORS. 구현 중 추가: 이동평균 전 이탈 ±6 자르기(clip_d). 판정 결과는 `/field_toolkit/phm_status`(JSON) → 4단계 자동 대응이 받을 것. A, B 좌표 확정(work_points.yaml, 대각선 10.2m). 1차 실행에서 Nav2 도착 기준 0.25m ↔ E401 0.10m 모순 발견 → nav2_params goal tolerance 0.08m/0.12rad로 변경, 채점 열 gt_loc_err_cm 추가(DEVLOG 15번). 이어서 goal tolerance 0.05m, bt_navigator default_server_timeout 100ms(DEVLOG 16·17번). **Gazebo 확인 끝(11/23)**: 24사이클 성공 24/24, empty 판정 8사이클 정상·경보 0, 하중 이름표 변경 후 학습 중 8사이클·경보 0 (실제 질량 효과는 4단계). E403이 매 사이클 뜸 → 원인은 nav_check 진척 기준점이 '남은 거리 0' 피드백에 고정되는 버그, 0 이하 피드백 무시로 수정(pytest, DEVLOG 18번). Gazebo 재확인은 4단계 첫 실행 CSV alarms 열에서.
 - 1단계 발견: 제자리 회전에서 IMU 1.192rad/s vs odom 1.000rad/s (유효 바퀴 간격 약 0.21m, 바퀴 안쪽 모서리 접촉 추정). **건형 결정: 보정하지 않음** (기준선에 흡수, 4단계 재캘리브레이션 사례로 사용). DEVLOG 11/22.
 - Gazebo GUI OpenGL 오류는 `wsl --shutdown`으로 해결(DEVLOG 14번).
 - 기존 2층 재시험(wall_partial 우회, E105, E403, occlude → E402)은 PHM 4단계 시나리오와 겹치므로 그때 함께 확인.
