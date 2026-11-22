@@ -37,6 +37,17 @@
 3. **정기 건강 점검 러너** (commissioning_runner 개조): 고정 경로 MoMa 사이클(A → 도착 확인 → 팔 approach/work/retreat/stowed → B …) 반복, A·B는 건형이 Publish Point로 찍음. 사이클마다 지표를 CSV 한 줄 + ground truth 위치 오차 열(채점용). 기준선 = 정상 조건 처음 K사이클 평균·표준편차, 기준선 재설정 명령(정비·재캘리브레이션 후). 건강도 0~100(지표별 기준선 이탈을 합친 점수, **계산식 초안 확인받기**). 예지 경보는 이동평균이 N회 연속 기준 초과일 때만. 확인: 정상 조건에서 건강도 안정, 오경보 없음.
 4. **주입 없는 조건 변화 시나리오 + 자동 대응**: A 바퀴 마모(URDF 실제 바퀴 반지름을 실행마다 단계 축소, DiffDrive odom 계산은 원래 반지름) / B 미끄러짐(경로 중간 저마찰 바닥) / C 하중 증가(차체·팔 끝 질량) / D 환경 변화(지도에 없는 장애물). 각각 실행 명령 한 줄. **Gazebo에서 되는지 먼저 조사해서 보고, 1시간 안에 안 되는 시나리오는 빼고 주입으로 대체하지 않는다.** 자동 대응: 예지 경보 수준별 speed_override 제한, 도착 정확도 나쁘면 팔 정밀 작업 보류 + "재캘리브레이션 권고", 사이클 종료 시 정비 리포트(Markdown: 어떤 지표가, 언제부터, 얼마나, 권고 조치와 우선순위). 잔여 사이클 추정(최근 추세선으로 기존 알람 기준까지). 확인: 시나리오 A에서 PHM 경보가 기존 알람보다 먼저, 몇 사이클 앞서는지.
 
+### PHM 추가 요구 (11/22 건형)
+1. **하중 조건별 기준선** (3단계, 가장 중요): 무거운 걸 들어 이동 잔차·구동 추종률이 바뀌는 건 열화가 아니라 운용 조건 변화. 사이클마다 하중 상태(예: empty, loaded_1kg …)를 CSV 열로 기록, **기준선을 하중 상태별로 따로 학습하고 같은 하중끼리만 비교**. 기준선 없는 하중이면 경보 대신 "기준선 학습 중"으로 K사이클 학습. pytest로 "하중만 바뀌면 예지 경보 없음"과 "같은 하중에서 지표가 나빠지면 경보"를 둘 다 테스트, Gazebo로도 확인.
+2. **하중 시나리오** (4단계): Gazebo에서 팔 끝(또는 차체)에 질량을 붙이는 방법 조사·제안(메시지 조작 주입 금지). 하중 상태를 러너·감시 노드가 토픽이나 파라미터로 공유. 질량 단계 초안을 표로 확인받기.
+3. **하중별 자동 대응** (4단계): 적재 상태에서는 speed_override로 최고 속도 제한(빈 상태/적재 상태 속도 프로파일). 프로파일 초안 확인받기.
+4. **팔 상태별 풋프린트** (4단계, 1시간 안에 안 되면 빼기): 팔이 stowed가 아니거나 큰 물건을 들면 Nav2 costmap에 큰 풋프린트, stowed면 원래대로. rviz2에서 외곽선이 바뀌는지 확인.
+5. E301 설명 보강 (11/22 완료): 펼친 채 주행 → 무게중심이 지지면 가장자리로(넘어짐), 풋프린트 커짐(충돌).
+
+사전 조사 (11/22, 설치본 확인):
+- 풋프린트: Jazzy Costmap2DROS가 `footprint` 토픽(geometry_msgs/Polygon)을 구독함(`footprint_sub_`), 파라미터 동적 변경 콜백도 있음 → `/local_costmap/footprint`, `/global_costmap/footprint`에 다각형을 보내면 실행 중 변경 가능할 것으로 보임 (실행 확인 전)
+- 질량: Gazebo `gz-sim-detachable-joint-system` 설치됨 → 짐 모델을 팔 끝에 붙였다 떼는 방식(attach/detach 토픽) 후보. 또는 xacro 인자로 짐 질량을 넣고 실행마다 바꾸는 방식(재시작 필요)
+
 ## 환경
 - WSL2 Ubuntu 24.04, ROS 2 Jazzy, Gazebo Harmonic, Python만. CPU 6코어, RAM 8GB.
 - 작업공간 `~/field_toolkit_ws` (빌드: 이 폴더에서 `colcon build --symlink-install`).
@@ -56,7 +67,7 @@
 | `robot_field_toolkit` | ament_python, MIT | 내 패키지 |
 
 robot_field_toolkit 구조:
-- `core/` (rclpy 금지, pytest): `common.py`(Judgement, Debounce, 각도 도구), `motion_check.py`(E101~E104), `slip_check.py`(E105), `scan_check.py`(E201·E202, occlude 계산), `interlock.py`(E301~E303, 속도 %), `nav_check.py`(E401~E403, pose_error), `arm_pose.py`(자세 추적), `commissioning.py`(계획·집계·리포트), `alarm_codes.py`(코드표 읽기)
+- `core/` (rclpy 금지, pytest): `common.py`(Judgement, Debounce, 각도 도구), `motion_check.py`(E101~E104), `slip_check.py`(E105), `scan_check.py`(E201·E202, occlude 계산), `interlock.py`(E301~E303, 속도 %), `nav_check.py`(E401~E403, pose_error), `arm_pose.py`(자세 추적), `commissioning.py`(계획·집계·리포트), `alarm_codes.py`(코드표 읽기), `health_indicators.py`(PHM 지표, wip)
 - `nodes/` (얇은 껍데기): `fault_injector`, `motion_monitor`(E101~E105), `arm_controller`, `safety_interlock`(E301~E303), `scan_fault_injector`, `sensor_monitor`(E201·E202), `nav_monitor`(E401~E403), `commissioning_runner`, 공통 `alarm_reporter.py`(AlarmReporter: /diagnostics 1Hz + /field_toolkit/alarms JSON + 터미널 안내)
 - `config/`: `alarm_codes.yaml`, `motion_monitor.yaml`, `safety_interlock.yaml`, `sensor_monitor.yaml`(scan_fault_injector 포함), `nav_monitor.yaml`, `arm_poses.yaml`, `commissioning.yaml`, `work_points.yaml`, `diagnostic_aggregator.yaml`
 - `launch/`: `toolkit_base.launch.py`(툴킷 노드 7개 + diagnostic_aggregator), `commissioning.launch.py`
@@ -106,7 +117,8 @@ robot_field_toolkit 구조:
 
 ### 다음 할 일 (11/22 PHM 방향으로 변경)
 - 작업 브랜치: **wip** (PHM은 시운전 러너·nav_check 등 wip 코드 위에 만든다). main은 Gazebo 확인 끝난 것만.
-- 위 "PHM 단계" 1 → 4 순서. 지금: **1단계 IMU 추가** — 코드 완료, Gazebo 확인 완료, 커밋 대기.
+- 위 "PHM 단계" 1 → 4 순서. 1단계 IMU 추가는 커밋 d15e4bc(wip, push됨).
+- **2단계 건강지표 (11/22 작성, 미커밋)**: `core/health_indicators.py` + `test/test_health_indicators.py`(18개). 건형 확정(추천대로): ① 회전 잔차는 차이(평균·RMS)와 비율(최소제곱 기울기) 둘 다, 회전 중(|odom w|>0.1) 샘플만 / ② 이동 잔차는 시작·끝 직선 이동량 비교(누적 경로 길이 X) / 보정 전후 odom 비교는 4단계 여유 있으면. `CycleData`에 (시각, 값) 목록을 넣고 `compute_indicators()` → CSV 한 줄 dict. `INDICATORS` 표에 하중 영향 표시(②③⑥ → 3단계 하중별 기준선). ⑧ 타이밍 토픽: scan, odom, imu, joint_states. 결과 열(사이클 타임, 성공, 알람, 복구 횟수)과 채점 열(ground truth 오차)은 3단계 러너에서.
 - 1단계 발견: 제자리 회전에서 IMU 1.192rad/s vs odom 1.000rad/s (유효 바퀴 간격 약 0.21m, 바퀴 안쪽 모서리 접촉 추정). **건형 결정: 보정하지 않음** (기준선에 흡수, 4단계 재캘리브레이션 사례로 사용). DEVLOG 11/22.
 - Gazebo GUI OpenGL 오류는 `wsl --shutdown`으로 해결(DEVLOG 14번).
 - 기존 2층 재시험(wall_partial 우회, E105, E403, occlude → E402)은 PHM 4단계 시나리오와 겹치므로 그때 함께 확인.
