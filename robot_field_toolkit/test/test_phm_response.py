@@ -22,3 +22,10 @@ def test_warning_holds_arm_and_recommends_recalibration():
 
 def test_unknown_status_is_conservative():
     assert response_for('???').hold_arm
+
+
+def test_loaded_speed_profile():
+    r = response_for('normal', 'loaded_0.5kg')
+    assert r.speed == 70 and not r.hold_arm and '적재' in r.advice
+    assert response_for('warning', 'loaded_0.5kg').speed == 50, 'PHM 대응이 더 낮으면 그쪽'
+    assert response_for('normal', 'empty').speed == 100

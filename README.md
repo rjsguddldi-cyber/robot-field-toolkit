@@ -31,6 +31,16 @@ flowchart LR
 - 정비 리포트 예시: [docs/report_wear_A.md](docs/report_wear_A.md)
 - 실제 도착 오차는 Gazebo 실제 위치(ground truth)로 따로 채점했고, 감지에는 쓰지 않았습니다.
 
+## 다른 조건 변화 시나리오 (Gazebo, 모두 메시지 조작 없음)
+| 시나리오 | 만든 방법 | 결과 | 의미 |
+|---|---|---|---|
+| **C 실제 하중** | 팔 끝에 0.5kg (`payload_kg:=0.5`) | 팔 도달 시간 4.4s → 10.5s. 하중별 기준선으로 학습 8 → 정상 4, **경보 0**. 같은 데이터를 빈 상태 기준선 하나로 판정하면 7사이클째 **거짓 경고** | 짐을 든 정상 운용을 고장으로 오판하지 않으려면 하중별 기준선이 필요 |
+| **B 저마찰 바닥** | A 지점에 마찰 0.05 판 (바퀴 1.5) | 판 위에서 돌아 출발하는 사이클마다 회전 비율 1.149 → 1.03 (약 −10%), 4사이클째 **주의**. **E105는 안 뜸** | 회전 미끄러짐은 직진 헛돎만 보는 E105의 빈틈 → IMU 회전 비율이 메움 |
+| **D 지도에 없는 장애물** | 경로 위에 3m 벽 | 처음엔 Nav2가 벽에 박음 → 원인은 costmap `max_obstacle_height` 기본값 0.0 (LiDAR 점 전부 버림, 11/21 충돌의 진짜 원인). 수정 후 회피 5/5. 그런데 돌아가는 사이클은 이동 잔차가 2.6% → 7%로 커져 **주의** | 이동 잔차는 길 모양에 따라 바뀜 → 경로 변경을 열화로 오판할 수 있는 **한계**. 경로별 기준선이 다음 과제 |
+| 팔 상태별 풋프린트 | 팔이 펼쳐지거나 짐을 들면 costmap 풋프린트 확대 (`arm_footprint`) | rviz2에서 외곽선이 원 → 사각형으로 바뀜 확인 | E301(펼친 채 주행 위험)과 같은 이유 |
+
+갑작스러운 사고(벽 충돌의 바퀴 헛돎)는 기존 알람 E105가 잡았고, 서서히 진행되는 열화(바퀴 마모)는 PHM이 먼저 잡았습니다. 둘은 역할이 다릅니다.
+
 ## PHM 구성
 | 단계 | 내용 | 파일 |
 |---|---|---|
@@ -51,6 +61,7 @@ flowchart LR
 ## 시행착오에서 배운 것 (자세한 기록: [docs/DEVLOG.md](docs/DEVLOG.md))
 | # | 증상 | 원인 → 조치 | 배운 것 |
 |---|---|---|---|
+| 23 | 지도에 없는 벽에 Nav2가 계속 박음 (11/21부터) | 정지 시험으로 "LiDAR 점은 보이는데 costmap엔 안 칠해짐" 확인 → 파라미터를 직접 꺼내 보니 `max_obstacle_height: 0.0` (Jazzy 기본값) → 2.0 | 11/21엔 로봇 반지름을 늘려 증상만 덮었음. 원인은 다른 층에 있었다 |
 | 15·16 | Nav2는 "도착 성공"인데 매 사이클 E401 | Nav2 도착 기준 25cm ↔ E401 10cm 모순 → 5cm로. 그래도 ground truth로 보니 실제로는 4.6cm에 섰는데 AMCL이 13cm 틀리게 믿음 | 작업 알람 기준이 측위 정밀도보다 좁으면 알람이 잡음을 잰다. 측위 품질을 따로 감시해야 함 |
 | 17 | 주행 중 Nav2가 목표를 중단 | BT가 컨트롤러 응답을 20ms 안에 못 받음 (WSL 통신 지연) → 100ms | 로그 시각 대조로 원인 특정 |
 | 18 | 정상 주행에서 E403(경로 차단)이 24/24 사이클 | 로그 시각 대조: 매번 출발 후 15.0초 = 판정 창. 진척 기준점이 "남은 거리 0" 피드백에 고정되는 버그 → 수정 후 0/4 | 알람 시험은 "뜨는지"와 "정상에서 안 뜨는지" 둘 다 |
@@ -71,7 +82,7 @@ flowchart LR
 
 ## 실행
 ```bash
-ros2 launch my_robot_gazebo gazebo.launch.py wheel_wear:=0.03     # 바퀴 마모 3% (기본 0)
+ros2 launch my_robot_gazebo gazebo.launch.py wheel_wear:=0.03     # 바퀴 마모 3% (기본 0), 하중은 payload_kg:=0.5
 ros2 launch robot_field_toolkit toolkit_base.launch.py             # 감시·인터락
 ros2 launch my_robot_navigation navigation.launch.py               # Nav2
 ros2 launch robot_field_toolkit health_check.launch.py cycles:=4 csv_name:=wear_A.csv condition:=wheel_wear=0.03
@@ -82,16 +93,18 @@ ros2 run robot_field_toolkit phm_report ~/field_toolkit_reports/wear_A.csv   # �
 ## 구성
 | 패키지 | 내용 |
 |---|---|
-| `robot_field_toolkit` | 직접 개발: PHM(지표·기준선·경보·자동 대응·리포트), 감시 노드와 알람, 인터락, 시운전·건강 점검 러너, 고장 주입(기존 알람 시험용) |
-| `my_robot_description` | 로봇 모델 (수업 자료 기반) + 2축 팔, IMU, 바퀴 마모 인자, ground truth 플러그인 추가 |
+| `robot_field_toolkit` | 직접 개발: PHM(지표·기준선·경보·자동 대응·리포트), 감시 노드와 알람, 인터락, 팔 상태별 풋프린트, 시운전·건강 점검 러너, 고장 주입(기존 알람 시험용), 시험용 장애물·저마찰 바닥(test_assets) |
+| `my_robot_description` | 로봇 모델 (수업 자료 기반) + 2축 팔, IMU, 바퀴 마모·팔 끝 하중 인자, ground truth 플러그인 추가 |
 | `my_robot_gazebo` / `my_robot_slam` / `my_robot_navigation` | Gazebo 월드·브리지, SLAM, Nav2 (수업 자료 기반, 변경 내역은 DEVLOG) |
 
-pytest 130여 개 + ament flake8/pep257. 개발 환경: Ubuntu 24.04 (WSL2), ROS 2 Jazzy, Gazebo Harmonic, Python.
+pytest 135개 + ament flake8/pep257. 개발 환경: Ubuntu 24.04 (WSL2), ROS 2 Jazzy, Gazebo Harmonic, Python.
 
 ## 한계와 다음 과제
 - **모든 수치는 Gazebo 시뮬레이션 결과**입니다. 실제 로봇에서는 기준선을 다시 학습해야 합니다.
-- 시나리오는 바퀴 마모(A)만 실행했습니다. 저마찰 바닥(B), 실제 하중(C), 지도에 없는 장애물(D), 팔 상태별 풋프린트는 다음 과제입니다. 하중별 기준선 분리는 하중 이름표로만 Gazebo 확인했습니다.
-- 마모 4% 이상에서는 차체가 앞으로 기울어 LiDAR 빔이 먼 바닥에 닿는 효과가 섞입니다 (계산: 4%에서 8.5m, 6%에서 5.7m).
+- 이동 잔차는 경로 모양에 민감합니다(시나리오 D). 경로·작업 지점 쌍별 기준선 또는 경로 길이 정규화가 필요합니다.
+- 시나리오를 이어서 돌리면 이동평균 이력이 다음 시나리오로 넘어가 경보 시점에 섞였습니다(B ← D, D ← B). 시나리오 사이에 이력을 비워야 합니다.
+- 마모 4% 이상에서는 차체가 앞으로 기울어 LiDAR 빔이 먼 바닥에 닿는 효과가 섞입니다 (계산: 4%에서 8.5m, 6%에서 5.7m). 6%는 실행하지 않았습니다.
+- 풋프린트는 rviz2 외곽선으로만 확인했습니다. Nav2가 `robot_radius` 설정이라 제어기 충돌 검사는 원으로 할 가능성이 큽니다.
 - 재캘리브레이션 자체는 구현하지 않았습니다 (권고까지). 현장에서는 IMU/odom 비율로 바퀴 간격을 천천히 보정하는 온라인 보정을 검토할 수 있습니다.
 
 ## 출처

@@ -21,3 +21,4 @@ health_runner:
     score_slope: 20.0            # 건강도 감점: d 1 초과부터 1당 20점 (화면용, 경보와 무관)
     clip_d: 6.0                  # 이동평균에 넣기 전 사이클 1회 이탈을 ±6으로 자름 (0점 기준과 같음)
     auto_response: true          # 4단계 자동 대응: 주의 속도 70%, 경고 50% + 팔 정밀 작업 보류 (core/phm_response.py)
+    loaded_speed: 70.0           # 하중별 속도 프로파일: empty가 아니면 최고 속도 70% (PHM 대응과 겹치면 낮은 쪽)

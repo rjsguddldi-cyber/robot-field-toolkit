@@ -33,7 +33,15 @@ class Response:
         return ', '.join(parts)
 
 
-def response_for(status):
-    """경보 수준(phm.Verdict.status) -> Response. 모르는 수준은 가장 보수적으로."""
+def response_for(status, load='empty', loaded_speed=70.0):
+    """
+    경보 수준(phm.Verdict.status) + 하중 상태 -> Response. 모르는 수준은 가장 보수적으로.
+
+    하중별 속도 프로파일: empty가 아니면(짐을 들면 관성이 커짐) loaded_speed까지 제한.
+    PHM 대응과 겹치면 더 낮은 속도를 쓴다.
+    """
     speed, hold, advice = RESPONSES.get(status, RESPONSES['warning'])
+    if load != 'empty' and loaded_speed < speed:
+        speed = loaded_speed
+        advice = ', '.join(a for a in (f'적재({load}) 속도 프로파일', advice) if a)
     return Response(speed, hold, advice)

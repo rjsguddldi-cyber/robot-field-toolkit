@@ -1,0 +1,22 @@
+<?xml version="1.0"?>
+<!-- PHM 4단계 시나리오 B: 저마찰 바닥 (기름·물기 자리). 1.2m x 1.2m, 두께 2mm, 마찰 0.05 (바퀴 1.5) -->
+<sdf version="1.9">
+  <model name="slippery_patch">
+    <static>true</static>
+    <link name="link">
+      <collision name="collision">
+        <geometry><box><size>1.2 1.2 0.002</size></box></geometry>
+        <surface>
+          <friction>
+            <ode><mu>0.05</mu><mu2>0.05</mu2></ode>
+            <bullet><friction>0.05</friction><friction2>0.05</friction2></bullet>
+          </friction>
+        </surface>
+      </collision>
+      <visual name="visual">
+        <geometry><box><size>1.2 1.2 0.002</size></box></geometry>
+        <material><ambient>0.2 0.4 0.9 1</ambient><diffuse>0.2 0.4 0.9 1</diffuse></material>
+      </visual>
+    </link>
+  </model>
+</sdf>
