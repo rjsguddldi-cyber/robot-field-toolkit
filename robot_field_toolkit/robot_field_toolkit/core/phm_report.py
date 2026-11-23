@@ -88,7 +88,8 @@ def first_index(rows, pred):
     return None
 
 
-def build_report(rows, baseline, title='PHM 정비 리포트', trend_window=8, warning_d=3.0):
+def build_report(rows, baseline, title='PHM 정비 리포트', trend_window=8, warning_d=3.0,
+                 load='empty'):
     """rows: CSV 줄(dict) 시간순, baseline: 그 하중 상태의 기준선 dict(mean, std)."""
     L = [f'# {title}', '',
          '> **Gazebo 시뮬레이션 기준** 결과입니다. 실제 로봇 수치가 아닙니다. '
@@ -138,8 +139,11 @@ def build_report(rows, baseline, title='PHM 정비 리포트', trend_window=8, w
     L.append('')
     if phm_i is None:
         L.append('- PHM 예지 경보가 뜨지 않았습니다.')
-    elif old:
+    elif old and min(old) > phm_i:
         L.append(f'- **PHM이 기존 알람보다 {min(old) - phm_i}사이클 먼저** 잡았습니다.')
+    elif old:
+        L.append(f'- 기존 알람이 {min(old) + 1}번째 사이클에서 PHM({phm_i + 1}번째)보다 먼저 떴습니다. '
+                 '갑작스러운 사고(충돌·헛돎)는 기존 알람이 맡는 영역입니다.')
     else:
         L.append(f'- **PHM은 {phm_i + 1}번째 사이클({rows[phm_i].get("condition")})에서 잡았고, '
                  f'기존 알람(E105·E401)은 끝({len(rows)}사이클, {rows[-1].get("condition")})까지 '
@@ -181,9 +185,14 @@ def build_report(rows, baseline, title='PHM 정비 리포트', trend_window=8, w
                  f'| {fmt_cycles(to_warn)} '
                  f'| {(ex[0] + " " + fmt_cycles(to_ex)) if ex else "해당 알람 없음"} |')
 
+    if not any(line.startswith('| ①') or line.startswith('| ②') or line.startswith('| ③')
+               or line.startswith('| ④') or line.startswith('| ⑤') or line.startswith('| ⑥')
+               or line.startswith('| ⑦') or line.startswith('| ⑧') for line in L):
+        L.append('| (기준선에서 평소 흔들림 이상 벗어난 지표 없음) | | | | | | |')
+
     # ---- 권고 ----
     status = last.get('phm_status', 'normal')
-    resp = response_for(status)
+    resp = response_for(status, load)
     worst = [k for _, k in sorted(rank, reverse=True)[:3]]
     L += ['', '## 4. 권고 조치와 우선순위', '',
           f'- 현재 수준: **{STATUS_KO.get(status, status)}** → 자동 대응: {resp.label() or "없음"}']

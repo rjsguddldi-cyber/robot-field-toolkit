@@ -34,6 +34,7 @@ from robot_field_toolkit.core.health_indicators import (
     compute_indicators, CycleData, IndicatorSettings)
 from robot_field_toolkit.core.nav_check import pose_error
 from robot_field_toolkit.core.phm import PhmMonitor, PhmSettings
+from robot_field_toolkit.core.phm_report import build_report
 from robot_field_toolkit.core.phm_response import response_for
 from robot_field_toolkit.core.scan_check import valid_ratio
 from sensor_msgs.msg import Imu, JointState, LaserScan
@@ -465,7 +466,25 @@ class HealthRunner(Node):
     def finish_all(self):
         self.csv_file.close()
         self.get_logger().info(f'건강 점검 끝. CSV: {self.csv_path}')
+        self.write_report()
         self.done = True
+
+    def write_report(self):
+        """사이클 종료 시 정비 리포트(Markdown)를 CSV 옆에 쓴다. 실패해도 러너는 끝낸다."""
+        try:
+            with open(self.csv_path, newline='', encoding='utf-8') as f:
+                rows = [r for r in csv.DictReader(f) if r.get('load_state') == self.load_state]
+            base = self.phm.to_dict().get(self.load_state)
+            if not rows or not base or not base.get('mean'):
+                self.get_logger().info('정비 리포트 생략: 기준선 학습 전')
+                return
+            out = os.path.splitext(self.csv_path)[0] + '_report.md'
+            with open(out, 'w', encoding='utf-8') as f:
+                f.write(build_report(rows, base, title=f'PHM 정비 리포트 ({self.load_state})',
+                                     load=self.load_state))
+            self.get_logger().info(f'정비 리포트: {out}')
+        except (OSError, KeyError, ValueError) as e:
+            self.get_logger().warn(f'정비 리포트 실패: {e}')
 
 
 def main(args=None):

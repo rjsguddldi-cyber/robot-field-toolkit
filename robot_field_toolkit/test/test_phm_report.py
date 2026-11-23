@@ -50,3 +50,19 @@ def test_report_counts_lead_cycles_when_old_alarm_fires():
     rows[-1]['alarms'] = 'E401'
     md = build_report(rows, BASE)
     assert 'PHM이 기존 알람보다 7사이클 먼저' in md
+
+
+def test_report_quiet_when_nothing_deviates_and_uses_load_speed():
+    rows = [{'condition': 'payload_kg=0.5', 'phm_status': 'normal', 'health': '100',
+             'alarms': '', 'alarm_indicators': '', 'rot_ratio': '1.15',
+             'trans_resid_pct': '2.6', 'arrive_dist_cm': '5.0'} for _ in range(4)]
+    md = build_report(rows, BASE, load='loaded_0.5kg')
+    assert '벗어난 지표 없음' in md
+    assert '속도 70%' in md, '적재 상태면 하중별 속도 프로파일'
+
+
+def test_report_when_old_alarm_comes_first():
+    rows = rows_for([0.0, 0.03])
+    rows[1]['alarms'] = 'E105'
+    md = build_report(rows, BASE)
+    assert '기존 알람이 2번째 사이클에서' in md and '-' not in md.split('먼저')[0][-5:]

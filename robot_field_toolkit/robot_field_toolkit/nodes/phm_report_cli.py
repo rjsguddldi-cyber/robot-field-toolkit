@@ -28,7 +28,7 @@ def main(args=None):
         base = json.load(f)[opt.load]
     out = opt.out or os.path.splitext(path)[0] + '_report.md'
     with open(out, 'w', encoding='utf-8') as f:
-        f.write(build_report(rows, base, title=opt.title))
+        f.write(build_report(rows, base, title=opt.title, load=opt.load))
     print(f'리포트 저장: {out}')
 
 
