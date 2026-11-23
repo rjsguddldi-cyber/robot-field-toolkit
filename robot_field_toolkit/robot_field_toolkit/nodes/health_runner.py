@@ -22,6 +22,8 @@ from ament_index_python.packages import get_package_share_directory
 from geometry_msgs.msg import PoseWithCovarianceStamped, Twist
 from nav2_msgs.action import NavigateToPose
 from nav_msgs.msg import Odometry
+from rcl_interfaces.msg import Parameter, ParameterType, ParameterValue
+from rcl_interfaces.srv import SetParameters
 import rclpy
 from rclpy.action import ActionClient
 from rclpy.node import Node
@@ -32,6 +34,7 @@ from robot_field_toolkit.core.health_indicators import (
     compute_indicators, CycleData, IndicatorSettings)
 from robot_field_toolkit.core.nav_check import pose_error
 from robot_field_toolkit.core.phm import PhmMonitor, PhmSettings
+from robot_field_toolkit.core.phm_response import response_for
 from robot_field_toolkit.core.scan_check import valid_ratio
 from sensor_msgs.msg import Imu, JointState, LaserScan
 from std_msgs.msg import Bool, String
@@ -41,7 +44,8 @@ import yaml
 
 INFO_COLS = ['cycle', 'sim_time_s', 'point', 'load_state', 'success', 'fail_reason',
              'cycle_time_s', 'alarms', 'nav_recoveries']
-PHM_COLS = ['health', 'phm_status', 'learned', 'worst_indicator', 'alarm_indicators']
+PHM_COLS = ['health', 'phm_status', 'learned', 'worst_indicator', 'alarm_indicators',
+            'response', 'note']   # response: 이 사이클 판정 뒤 적용한 자동 대응
 # 채점 전용: 실제 도착 오차, 그리고 도착 순간 로봇이 믿는 위치(TF)와 실제 위치의 거리
 GT_COLS = ['gt_arrive_dist_cm', 'gt_arrive_yaw_deg', 'gt_loc_err_cm',
            'condition']   # 시험 조건 표시 (예: wheel_wear=0.03). 채점·분석용, 판정에는 안 씀
@@ -63,7 +67,7 @@ class HealthRunner(Node):
                 ('load_state', 'empty'), ('csv_name', ''), ('condition', ''),
                 ('k_baseline', 8), ('ma_window', 5),
                 ('n_consecutive', 3), ('caution_d', 2.0), ('warning_d', 3.0),
-                ('score_slope', 20.0), ('clip_d', 6.0)]:
+                ('score_slope', 20.0), ('clip_d', 6.0), ('auto_response', True)]:
             self.declare_parameter(name, default)
 
         def p(name):
@@ -119,6 +123,11 @@ class HealthRunner(Node):
         self.create_service(Trigger, '~/reset_baseline', self.on_reset)
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
+        # 4단계 자동 대응: 경보 수준에 따라 safety_interlock 속도 제한, 팔 정밀 작업 보류
+        self.param_cli = self.create_client(SetParameters, '/safety_interlock/set_parameters')
+        self.response = response_for('normal')
+        self.applied_speed = None
+        self.note = ''
 
         self.arm_state = {}
         self.inhibit = False
@@ -335,6 +344,10 @@ class HealthRunner(Node):
         if self.inhibit:
             self.finish_cycle(t, 'E401 도착 오차 초과로 팔 작업 생략')
             return
+        if self.response.hold_arm:   # PHM 경고: 사고 전에 정밀 작업을 멈춘다 (실패가 아니라 대응)
+            self.note = 'PHM 경고: 팔 정밀 작업 보류'
+            self.finish_cycle(t, '')
+            return
         self.arm_step = 0
         self.request_arm()
 
@@ -362,6 +375,7 @@ class HealthRunner(Node):
         ind = compute_indicators(self.data, self.ind_settings)
         v = self.phm.update(self.cycle_load, ind, success)
         self.save_baseline()   # 기준선 + 이동평균 이력 (러너를 다시 켜도 이어지게)
+        self.apply_response(v.status)
 
         info = {
             'cycle': self.idx + 1, 'sim_time_s': round(self.cycle_start_t, 1),
@@ -371,12 +385,17 @@ class HealthRunner(Node):
         phm = {
             'health': None if v.health is None else round(v.health, 1),
             'phm_status': v.status, 'learned': f'{v.learned}/{v.k}',
-            'worst_indicator': v.worst or '', 'alarm_indicators': ' '.join(v.alarm_keys)}
+            'worst_indicator': v.worst or '', 'alarm_indicators': ' '.join(v.alarm_keys),
+            'response': self.response.label(), 'note': self.note}
+        self.note = ''
         gt = dict(zip(GT_COLS, (*(self.gt_arrival or (None, None, None)), self.cycle_condition)))
         row = {**info, **{k: (round(x, 4) if isinstance(x, float) else x)
                           for k, x in ind.items()}, **phm, **gt}
         if self.csv is None:
-            self.csv = csv.DictWriter(self.csv_file, INFO_COLS + list(ind) + PHM_COLS + GT_COLS)
+            fields = INFO_COLS + list(ind) + PHM_COLS + GT_COLS
+            if not self.csv_new:
+                self.upgrade_csv_header(fields)
+            self.csv = csv.DictWriter(self.csv_file, fields)
             if self.csv_new:
                 self.csv.writeheader()
         self.csv.writerow(row)
@@ -385,7 +404,9 @@ class HealthRunner(Node):
         self.status_pub.publish(String(data=json.dumps({
             'cycle': self.idx + 1, 'load_state': v.load_state, 'status': v.status,
             'label': v.label(), 'health': phm['health'], 'worst': v.worst,
-            'alarm_indicators': list(v.alarm_keys), 'd_ma': v.d_ma or {}},
+            'alarm_indicators': list(v.alarm_keys), 'd_ma': v.d_ma or {},
+            'response': {'speed': self.response.speed, 'hold_arm': self.response.hold_arm,
+                         'advice': self.response.advice}},
             ensure_ascii=False)))
         health_txt = '-' if v.health is None else f'{v.health:.0f}'
         alarm_txt = f' 경보: {",".join(v.alarm_keys)}' if v.alarm_keys else ''
@@ -402,6 +423,36 @@ class HealthRunner(Node):
         self.data = None
         self.idx += 1
         self.start_cycle(t)
+
+    def apply_response(self, status):
+        """경보 수준 -> 자동 대응. 속도가 바뀔 때만 safety_interlock에 보낸다."""
+        if not self.get_parameter('auto_response').value:
+            return
+        new = response_for(status)
+        if new.hold_arm and not self.response.hold_arm:
+            self.get_logger().warn(f'[자동 대응] {new.advice}')
+        self.response = new
+        if new.speed != self.applied_speed and self.param_cli.service_is_ready():
+            req = SetParameters.Request()
+            req.parameters = [Parameter(name='speed_override', value=ParameterValue(
+                type=ParameterType.PARAMETER_DOUBLE, double_value=new.speed))]
+            self.param_cli.call_async(req)
+            self.get_logger().info(f'[자동 대응] 속도 오버라이드 {new.speed:.0f}%')
+            self.applied_speed = new.speed
+
+    def upgrade_csv_header(self, fields):
+        """이어 쓸 CSV의 열이 지금과 다르면(열 추가 등) 새 열 순서로 다시 쓴다. 없는 값은 빈칸."""
+        self.csv_file.close()
+        with open(self.csv_path, newline='', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            old_fields, rows = reader.fieldnames, list(reader)
+        if old_fields != fields:
+            with open(self.csv_path, 'w', newline='', encoding='utf-8') as f:
+                w = csv.DictWriter(f, fields + [c for c in old_fields if c not in fields])
+                w.writeheader()
+                w.writerows(rows)
+            self.get_logger().info(f'CSV 열 갱신: {len(rows)}줄 다시 씀')
+        self.csv_file = open(self.csv_path, 'a', newline='', encoding='utf-8')
 
     def save_baseline(self):
         with open(self.baseline_path, 'w', encoding='utf-8') as f:
