@@ -40,6 +40,9 @@
   <xacro:property name="forearm_mass"    value="0.2"/>
   <xacro:property name="tool_size"       value="0.03"/>
   <xacro:property name="tool_mass"       value="0.05"/>
+  <!-- PHM 4단계 시나리오 C: 팔 끝 하중 [kg] (파지 대신 툴 질량에 더함, 기본 0) -->
+  <xacro:arg name="payload_kg" default="0.0"/>
+  <xacro:property name="tool_mass_total" value="${tool_mass + $(arg payload_kg)}"/>
   <!-- ==================== Inertia Macros ==================== -->
   <xacro:macro name="box_inertia" params="m x y z">
     <inertial>
@@ -394,7 +397,7 @@
     <collision>
       <geometry><box size="${tool_size} ${tool_size} ${tool_size}"/></geometry>
     </collision>
-    <xacro:box_inertia m="${tool_mass}" x="${tool_size}" y="${tool_size}" z="${tool_size}"/>
+    <xacro:box_inertia m="${tool_mass_total}" x="${tool_size}" y="${tool_size}" z="${tool_size}"/>
   </link>
   <joint name="tool_joint" type="fixed">
     <parent link="forearm_link"/>

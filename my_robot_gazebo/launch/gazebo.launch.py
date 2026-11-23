@@ -16,7 +16,8 @@ def generate_launch_description():
     urdf_file = os.path.join(description_dir, 'urdf', 'my_robot.urdf.xacro')
     # wheel_wear: PHM 4단계 바퀴 마모율 (기본 0 = 마모 없음)
     robot_description = ParameterValue(
-        Command(['xacro ', urdf_file, ' wheel_wear:=', LaunchConfiguration('wheel_wear')]),
+        Command(['xacro ', urdf_file, ' wheel_wear:=', LaunchConfiguration('wheel_wear'),
+                 ' payload_kg:=', LaunchConfiguration('payload_kg')]),
         value_type=str)
 
     world_file = os.path.join(gazebo_dir, 'worlds', 'simple_room.world')
@@ -25,6 +26,8 @@ def generate_launch_description():
     return LaunchDescription([
         DeclareLaunchArgument('wheel_wear', default_value='0.0',
                               description='바퀴 마모율 (0.03 = 반지름 3% 감소)'),
+        DeclareLaunchArgument('payload_kg', default_value='0.0',
+                              description='팔 끝 하중 [kg] (시나리오 C)'),
         # Gazebo 실행
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(

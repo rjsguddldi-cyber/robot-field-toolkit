@@ -67,7 +67,8 @@ class HealthRunner(Node):
                 ('load_state', 'empty'), ('csv_name', ''), ('condition', ''),
                 ('k_baseline', 8), ('ma_window', 5),
                 ('n_consecutive', 3), ('caution_d', 2.0), ('warning_d', 3.0),
-                ('score_slope', 20.0), ('clip_d', 6.0), ('auto_response', True)]:
+                ('score_slope', 20.0), ('clip_d', 6.0), ('auto_response', True),
+                ('loaded_speed', 70.0)]:
             self.declare_parameter(name, default)
 
         def p(name):
@@ -126,6 +127,7 @@ class HealthRunner(Node):
         # 4단계 자동 대응: 경보 수준에 따라 safety_interlock 속도 제한, 팔 정밀 작업 보류
         self.param_cli = self.create_client(SetParameters, '/safety_interlock/set_parameters')
         self.response = response_for('normal')
+        self.last_status = 'normal'
         self.applied_speed = None
         self.note = ''
 
@@ -267,6 +269,7 @@ class HealthRunner(Node):
         self.cycle_condition = self.condition
         self.cycle_start_t = t
         self.alarms = []
+        self.apply_response(self.last_status)   # 하중이 바뀌었으면 속도 프로파일 반영
         self.recoveries = 0
         self.gt_arrival = None
         pt = self.points[self.point]
@@ -428,7 +431,8 @@ class HealthRunner(Node):
         """경보 수준 -> 자동 대응. 속도가 바뀔 때만 safety_interlock에 보낸다."""
         if not self.get_parameter('auto_response').value:
             return
-        new = response_for(status)
+        self.last_status = status
+        new = response_for(status, self.load_state, self.get_parameter('loaded_speed').value)
         if new.hold_arm and not self.response.hold_arm:
             self.get_logger().warn(f'[자동 대응] {new.advice}')
         self.response = new
