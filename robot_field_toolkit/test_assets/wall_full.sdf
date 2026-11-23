@@ -1,0 +1,16 @@
+<?xml version="1.0"?>
+<!-- E403 시험용 고정 벽 (static: 로봇이 밀 수 없음). 길이 10.0 m, 두께 0.2 m, 높이 0.5 m -->
+<sdf version="1.9">
+  <model name="wall_full">
+    <static>true</static>
+    <link name="link">
+      <collision name="collision">
+        <geometry><box><size>0.2 10.0 0.5</size></box></geometry>
+      </collision>
+      <visual name="visual">
+        <geometry><box><size>0.2 10.0 0.5</size></box></geometry>
+        <material><ambient>0.8 0.3 0.1 1</ambient><diffuse>0.8 0.3 0.1 1</diffuse></material>
+      </visual>
+    </link>
+  </model>
+</sdf>

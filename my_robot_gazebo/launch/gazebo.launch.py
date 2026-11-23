@@ -1,9 +1,9 @@
 import os
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import IncludeLaunchDescription
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import Command
+from launch.substitutions import Command, LaunchConfiguration
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
 
@@ -14,12 +14,17 @@ def generate_launch_description():
     ros_gz_sim_dir = get_package_share_directory('ros_gz_sim')
 
     urdf_file = os.path.join(description_dir, 'urdf', 'my_robot.urdf.xacro')
-    robot_description = ParameterValue(Command(['xacro ', urdf_file]), value_type=str)
+    # wheel_wear: PHM 4단계 바퀴 마모율 (기본 0 = 마모 없음)
+    robot_description = ParameterValue(
+        Command(['xacro ', urdf_file, ' wheel_wear:=', LaunchConfiguration('wheel_wear')]),
+        value_type=str)
 
     world_file = os.path.join(gazebo_dir, 'worlds', 'simple_room.world')
     bridge_params = os.path.join(gazebo_dir, 'params', 'my_robot_bridge.yaml')
 
     return LaunchDescription([
+        DeclareLaunchArgument('wheel_wear', default_value='0.0',
+                              description='바퀴 마모율 (0.03 = 반지름 3% 감소)'),
         # Gazebo 실행
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(

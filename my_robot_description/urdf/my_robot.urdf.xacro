@@ -12,6 +12,10 @@
   <xacro:property name="wheel_mass"       value="0.5"/>
   <xacro:property name="wheel_separation" value="0.25"/>
   <xacro:property name="wheel_x_offset"   value="0.05"/>  <!-- 전방 오프셋 -->
+  <!-- PHM 4단계 시나리오 A: 바퀴 마모율 (0.03 = 반지름 3% 감소). 실제 바퀴(충돌·모양)만 줄고
+       DiffDrive odom 계산은 원래 wheel_radius를 그대로 쓴다 → odom이 실제보다 많이 갔다고 믿음 -->
+  <xacro:arg name="wheel_wear" default="0.0"/>
+  <xacro:property name="wheel_radius_actual" value="${wheel_radius * (1.0 - $(arg wheel_wear))}"/>
 
   <xacro:property name="caster_radius" value="0.03"/>
   <xacro:property name="caster_mass"    value="0.1"/>
@@ -70,7 +74,7 @@
       <visual>
         <origin xyz="0 0 0" rpy="${pi/2} 0 0"/>
         <geometry>
-          <cylinder radius="${wheel_radius}" length="${wheel_width}"/>
+          <cylinder radius="${wheel_radius_actual}" length="${wheel_width}"/>
         </geometry>
         <material name="dark_gray">
           <color rgba="0.2 0.2 0.2 1.0"/>
@@ -79,10 +83,10 @@
       <collision>
         <origin xyz="0 0 0" rpy="${pi/2} 0 0"/>
         <geometry>
-          <cylinder radius="${wheel_radius}" length="${wheel_width}"/>
+          <cylinder radius="${wheel_radius_actual}" length="${wheel_width}"/>
         </geometry>
       </collision>
-      <xacro:cylinder_inertia m="${wheel_mass}" r="${wheel_radius}" l="${wheel_width}"/>
+      <xacro:cylinder_inertia m="${wheel_mass}" r="${wheel_radius_actual}" l="${wheel_width}"/>
     </link>
 
     <joint name="${prefix}_wheel_joint" type="continuous">
@@ -226,6 +230,37 @@
     <child link="camera_optical_link"/>
     <origin xyz="0 0 0" rpy="${-pi/2} 0 ${-pi/2}"/>
   </joint>
+  <!-- IMU (PHM 1단계에서 추가): 차체 중심. 링크만 두고 센서는 아래 gazebo 블록 -->
+  <link name="imu_link"/>
+  <joint name="imu_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="imu_link"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </joint>
+
+  <!-- IMU 센서 → /imu 토픽 (월드의 gz-sim-imu-system이 계산). 잡음은 저가형 MEMS IMU 수준 초안 -->
+  <gazebo reference="imu_link">
+    <sensor name="imu" type="imu">
+      <always_on>true</always_on>
+      <update_rate>100</update_rate>
+      <visualize>false</visualize>
+      <topic>imu</topic>
+      <gz_frame_id>imu_link</gz_frame_id>
+      <imu>
+        <angular_velocity>
+          <x><noise type="gaussian"><mean>0.0</mean><stddev>0.002</stddev></noise></x>
+          <y><noise type="gaussian"><mean>0.0</mean><stddev>0.002</stddev></noise></y>
+          <z><noise type="gaussian"><mean>0.0</mean><stddev>0.002</stddev></noise></z>
+        </angular_velocity>
+        <linear_acceleration>
+          <x><noise type="gaussian"><mean>0.0</mean><stddev>0.02</stddev></noise></x>
+          <y><noise type="gaussian"><mean>0.0</mean><stddev>0.02</stddev></noise></y>
+          <z><noise type="gaussian"><mean>0.0</mean><stddev>0.02</stddev></noise></z>
+        </linear_acceleration>
+      </imu>
+    </sensor>
+  </gazebo>
+
   <!-- 2D 라이다 센서 → /scan 토픽 -->
 <gazebo reference="lidar_link">
   <sensor name="lidar" type="gpu_lidar">
@@ -424,6 +459,20 @@
       <joint_name>right_wheel_joint</joint_name>
       <joint_name>shoulder_joint</joint_name>
       <joint_name>elbow_joint</joint_name>
+    </plugin>
+  </gazebo>
+
+<!-- 채점용 ground truth (PHM 3단계): Gazebo 월드 기준 실제 위치. 감지에는 쓰지 않는다.
+     tf_topic을 따로 둬서 로봇 TF(tf)와 섞이지 않게 함 -->
+  <gazebo>
+    <plugin filename="gz-sim-odometry-publisher-system"
+            name="gz::sim::systems::OdometryPublisher">
+      <odom_frame>gt_world</odom_frame>
+      <robot_base_frame>gt_base_footprint</robot_base_frame>
+      <odom_topic>ground_truth/odom</odom_topic>
+      <tf_topic>ground_truth/tf_unused</tf_topic>
+      <odom_publish_frequency>20</odom_publish_frequency>
+      <dimensions>2</dimensions>
     </plugin>
   </gazebo>
 </robot>

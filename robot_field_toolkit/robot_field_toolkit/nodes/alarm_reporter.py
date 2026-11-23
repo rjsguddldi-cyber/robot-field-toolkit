@@ -62,7 +62,12 @@ class AlarmReporter:
         log = self.node.get_logger()
         if judgement.active:
             text = f'\n{info.format_text()}\n  현재값: {judgement.detail}'
-            (log.warn if info.level == 'WARN' else log.error)(text)
+            # rclpy 로거는 호출 위치마다 심각도를 기억한다. 한 줄에서 warn·error를 번갈아 부르면
+            # ValueError로 노드가 죽으므로 호출 위치를 나눈다 (11/23, DEVLOG 22번)
+            if info.level == 'WARN':
+                log.warn(text)
+            else:
+                log.error(text)
         else:
             log.info(f'[해제] {info.code} {info.name}')
 

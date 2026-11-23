@@ -1,0 +1,12 @@
+# commissioning_runner 파라미터. ※ 값은 초안, 건형 확인 후 확정.
+commissioning_runner:
+  ros__parameters:
+    use_sim_time: true
+    points_file: ''              # 비우면 패키지 config/work_points.yaml
+    speeds: [30.0, 60.0, 100.0]  # 속도 오버라이드 단계 [%] (두산 실제모드 시운전처럼 저속부터)
+    cycles_per_speed: 3          # 속도 단계마다 사이클 횟수
+    settle_time: 2.0             # 도착 후 기다렸다가 도착 오차를 잰다 [s] (nav_monitor settle 1s + 여유)
+    nav_timeout: 120.0           # 이동 제한 시간 [s]
+    arm_step_timeout: 15.0       # 팔 자세 하나 제한 시간 [s]
+    report_dir: '~/field_toolkit_reports'
+    note: ''                     # 리포트에 남길 메모 (예: 'LiDAR occlude 90도')

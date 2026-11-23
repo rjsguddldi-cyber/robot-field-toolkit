@@ -16,3 +16,7 @@ diagnostic_aggregator:
         type: diagnostic_aggregator/GenericAnalyzer
         path: Interlock                         # 주행·팔 인터락 (E3xx)
         startswith: ['field_toolkit/interlock']
+      nav:
+        type: diagnostic_aggregator/GenericAnalyzer
+        path: Navigation                        # 주행 감시 (E4xx)
+        startswith: ['field_toolkit/nav']

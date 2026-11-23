@@ -21,3 +21,11 @@ motion_monitor:
     drift_time: 1.5       # E104: 지속 [s]
     clear_time: 1.0       # 조건이 이만큼 계속 사라지면 해제 [s]
     odom_timeout: 0.5     # odom이 이보다 오래 없으면 E101/E102/E104 판정 보류 [s]
+
+    # E105 바퀴 헛돎 (odom과 LiDAR 교차 확인). 11/22 건형 결정
+    scan_topic: scan
+    slip_window: 2.0        # 이 시간 동안의 변화를 비교 [s]
+    odom_dist_min: 0.15     # odom이 이만큼 이상 움직였다고 할 때만 판정 [m]
+    scan_change_max: 0.03   # 스캔 거리 변화 중앙값이 이보다 작으면 '안 움직임' [m]
+    slip_yaw_max: 0.1       # 그동안 회전이 이보다 크면 판정 안 함 [rad]
+    scan_valid_min: 0.3     # 비교 가능한 빔 비율이 이보다 작으면 판정 안 함 (가림은 E201)

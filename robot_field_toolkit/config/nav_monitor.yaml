@@ -1,0 +1,14 @@
+# nav_monitor 파라미터. ※ 값은 초안, 건형 확인 후 확정.
+nav_monitor:
+  ros__parameters:
+    use_sim_time: true
+    arrive_dist_tol: 0.10   # E401: 도착 거리 오차 허용 [m] (Nav2 goal checker는 0.25m)
+    arrive_yaw_tol: 0.15    # E401: 도착 각도 오차 허용 [rad] (약 8.6도, Nav2는 0.25rad)
+    settle_time: 1.0        # E401: 도착 후 이만큼 기다렸다 잰다 [s]
+    cov_xy_max: 0.35        # E402: AMCL 위치 표준편차 허용 [m] (11/21 건형 결정: 평상시 0.21~0.30m 측정)
+    cov_yaw_max: 0.45       # E402: AMCL 방향 표준편차 허용 [rad] (11/21 건형 결정)
+    lost_time: 2.0          # E402: 지속 [s]
+    recovery_max: 3         # E403: 한 목표에서 복구 동작 횟수
+    progress_window: 15.0   # E403: 이 시간 동안
+    progress_min: 0.2       # E403: 남은 거리가 이만큼도 안 줄면 [m]
+    clear_time: 1.0         # E402 해제 지연 [s]
